@@ -96,6 +96,10 @@ jobs:
           sphinx-build -b html docs/it/ html/${{ steps.deployment.outputs.path }}/it
           sphinx-build -b html docs/en/ html/${{ steps.deployment.outputs.path }}/en
 
+      - name: Create root index.html
+        run: |
+          #cp .github/workflow/template/index-template.html html/index.html
+
       - name: Deploy to GitHub Pages
         if: success()
         uses: crazy-max/ghaction-github-pages@v2
