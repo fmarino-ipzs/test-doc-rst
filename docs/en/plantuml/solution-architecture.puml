@@ -1,0 +1,26 @@
+@startuml C4_Architecture
+!include <C4/C4_Container>
+
+title "Generic Client-Server Architecture - C4 Diagram"
+
+Person(user, "User", "Uses the application")
+System_Boundary(systemBoundary, "Client-Server System") {
+    Container(clientApp, "Client Application", "HTML, CSS, JavaScript", "User interface that manages user interaction")
+    Container(apiGateway, "API Gateway", "Node.js", "Handles requests, authentication, and routing")
+    Container(appServer, "Application Server", "Java Spring Boot", "Processes business logic and coordinates services")
+    Container(authService, "Authentication Service", "OAuth 2.0", "Manages authentication and authorization")
+    ContainerDb(database, "Database", "PostgreSQL", "Stores application data")
+    Container(cacheServer, "Cache Server", "Redis", "Temporarily stores data to improve performance")
+}
+
+System_Ext(thirdPartyService, "External Service", "Provides additional functionality or data")
+
+Rel(user, clientApp, "Uses", "HTTPS")
+Rel(clientApp, apiGateway, "Sends API requests", "JSON/HTTPS")
+Rel(apiGateway, authService, "Verifies token", "JSON/HTTPS")
+Rel(apiGateway, appServer, "Forwards authenticated requests", "JSON/HTTPS")
+Rel(appServer, database, "Reads/Writes data", "SQL/TCP")
+Rel(appServer, cacheServer, "Uses to improve performance", "TCP")
+Rel(appServer, thirdPartyService, "Integrates with", "JSON/HTTPS")
+
+@enduml

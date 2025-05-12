@@ -1,0 +1,33 @@
+# Jekyll
+Gemfile.lock
+_site
+.jekyll-metadata
+
+# Mac generic
+.DS_Store
+
+# Windows generic
+Thumbs.db
+
+# Swap files
+*.swp
+html
+env
+venv
+build
+latex
+env-preview
+.venv
+.vscode
+*.cfg
+*.tmpl
+*.exe
+*.csh
+*.fish
+*.ps1
+*.9
+v_env/bin/python3
+v_env/bin/python
+v_env/bin/pip3
+v_env/bin/pip
+v_env/bin/activate
