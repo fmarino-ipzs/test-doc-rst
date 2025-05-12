@@ -76,45 +76,45 @@ jobs:
 
           echo "Publishing $path"
 
-      # # Run Sphinx build for HTML output
-      # - name: Build branch
-      #   run: |-
+      # Run Sphinx build for HTML output
+      - name: Build branch
+        run: |-
         
-      #     # Debug information
-      #     echo "GitHub ref: $GITHUB_REF"
-      #     echo "GitHub head ref: $GITHUB_HEAD_REF"
-      #     echo "GitHub ref type: $GITHUB_REF_TYPE"
-      #     echo "Event name: ${{ github.event_name }}"
+          # Debug information
+          echo "GitHub ref: $GITHUB_REF"
+          echo "GitHub head ref: $GITHUB_HEAD_REF"
+          echo "GitHub ref type: $GITHUB_REF_TYPE"
+          echo "Event name: ${{ github.event_name }}"
           
-      #     # Determine path for content
-      #     if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
-      #       # For tags, extract the version number and create a versioned folder
-      #       TAG=${GITHUB_REF#refs/}
-      #       SUBPATH="${TAG}" # e.g. tags/v1.0.0
-      #       echo "This is a tag build: $TAG"
-      #     elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-      #       # For pull requests, use the PR number
-      #       PR_NUMBER="${{ github.event.pull_request.number }}"
-      #       SUBPATH="prs/pr-${PR_NUMBER}" # e.g. prs/pr-53
-      #       echo "This is a PR build: $PR_NUMBER"
-      #     else
-      #       # For branch pushes, use the branch name
-      #       BRANCH=${GITHUB_REF#refs/heads/}
-      #       SUBPATH="${BRANCH}" # e.g. versione-corrente, warning-removal
-      #       echo "This is a branch build: $BRANCH"
-      #     fi
+          # Determine path for content
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            # For tags, extract the version number and create a versioned folder
+            TAG=${GITHUB_REF#refs/}
+            SUBPATH="${TAG}" # e.g. tags/v1.0.0
+            echo "This is a tag build: $TAG"
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # For pull requests, use the PR number
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            SUBPATH="prs/pr-${PR_NUMBER}" # e.g. prs/pr-53
+            echo "This is a PR build: $PR_NUMBER"
+          else
+            # For branch pushes, use the branch name
+            BRANCH=${GITHUB_REF#refs/heads/}
+            SUBPATH="${BRANCH}" # e.g. versione-corrente, warning-removal
+            echo "This is a branch build: $BRANCH"
+          fi
           
-      #     echo "Publishing $SUBPATH"
+          echo "Publishing $SUBPATH"
           
-      #     # Create output directories
-      #     mkdir -p "html/${SUBPATH}/it"
-      #     mkdir -p "html/${SUBPATH}/en"
+          # Create output directories
+          mkdir -p "html/${{ steps.deployment.outputs.path }}/it"
+          mkdir -p "html/${{ steps.deployment.outputs.path }}/en"
 
-      #     echo "Publishing html/$SUBPATH/it"
-      #     echo "Publishing html/$SUBPATH/en"
+          echo "Building html/${{ steps.deployment.outputs.path }}/it"
+          echo "Building html/${{ steps.deployment.outputs.path }}/en"
 
-      #     sphinx-build -b html docs/it/ html/$SUBPATH/it
-      #     sphinx-build -b html docs/en/ html/$SUBPATH/en
+          sphinx-build -b html docs/it/ html/${{ steps.deployment.outputs.path }}/it
+          sphinx-build -b html docs/en/ html/${{ steps.deployment.outputs.path }}/en
 
       # # Create main index.html
       # - name: Create GH page index
@@ -136,12 +136,12 @@ jobs:
       #     </body>
       #     </html>' > html/index.html
 
-      # - name: Deploy to GitHub Pages
-      #   if: success()
-      #   uses: crazy-max/ghaction-github-pages@v2
-      #   with:
-      #     target_branch: gh-pages
-      #     build_dir: html
-      #     keep_history: true
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Deploy to GitHub Pages
+        if: success()
+        uses: crazy-max/ghaction-github-pages@v2
+        with:
+          target_branch: gh-pages
+          build_dir: html
+          keep_history: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
