@@ -1,15 +1,277 @@
-
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <title> Wallet docs</title>
-  <meta name="viewport" content="initial-scale=1.0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Documentazione del Progetto</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      border-bottom: 1px solid #eaecef;
+      padding-bottom: 10px;
+    }
+    h2 {
+      margin-top: 24px;
+      margin-bottom: 16px;
+      font-size: 1.5em;
+    }
+    .section {
+      margin-bottom: 30px;
+    }
+    .language-link {
+      display: inline-block;
+      margin-right: 15px;
+      padding: 5px 10px;
+      background: #f1f8ff;
+      border-radius: 3px;
+      text-decoration: none;
+      color: #0366d6;
+    }
+    .language-link:hover {
+      background: #ddeeff;
+    }
+    .item {
+      margin: 10px 0;
+      padding: 10px;
+      background: #f6f8fa;
+      border-radius: 3px;
+    }
+    .item-title {
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .no-item {
+      color: #666;
+      font-style: italic;
+    }
+  </style>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Questa funzione viene eseguita quando il DOM è completamente caricato
+      fetchDirectoryStructure();
+    });
+
+    async function fetchDirectoryStructure() {
+      try {
+        // Sezioni da popolare
+        const sections = {
+          versioneCorrente: document.getElementById('versione-corrente-content'),
+          releases: document.getElementById('releases-content'),
+          prs: document.getElementById('prs-content')
+        };
+        
+        // Funzione per ottenere i nomi delle directory
+        async function getDirectoriesFromLinks() {
+          // Questa è un'implementazione sicura che non si basa sull'API GitHub
+          // ma utilizza una tecnica che sfrutta l'indice delle directory di GitHub Pages
+          
+          const knownDirs = {
+            'versione-corrente': ['versione-corrente'],
+            'releases': [], 
+            'prs': []
+          };
+          
+          // Opzionale: se c'è un indice delle directory, possiamo usarlo
+          try {
+            // In mancanza di un indice delle directory, possiamo almeno verificare
+            // l'esistenza di cartelle standard
+            
+            // Verifichiamo l'esistenza di releases comuni
+            const commonReleases = ['v1.0.0', 'v1.0.1', 'v1.1.0', 'v2.0.0', 'latest'];
+            for (const rel of commonReleases) {
+              if (await checkDirectoryExists(`releases/${rel}`)) {
+                knownDirs.releases.push({name: rel});
+              }
+            }
+            
+            // Per le PR, possiamo provare con numeri comuni
+            // Verifichiamo le prime 20 PR
+            for (let i = 1; i <= 20; i++) {
+              const prName = `pr${i}`;
+              if (await checkDirectoryExists(`prs/${prName}`)) {
+                knownDirs.prs.push({name: prName});
+              }
+            }
+            
+            // Qui potresti aggiungere ulteriori tecniche di scoperta se necessario
+          } catch (e) {
+            console.warn('Impossibile ottenere l\'indice delle directory:', e);
+          }
+          
+          return knownDirs;
+        }
+        
+        // Verifica se una directory esiste
+        async function checkDirectoryExists(path) {
+          try {
+            // Controlliamo se esiste almeno uno dei due indici (it/en)
+            return (await checkForIndexFile(path, 'it')) || (await checkForIndexFile(path, 'en'));
+          } catch (error) {
+            return false;
+          }
+        }
+        
+        // Controlla se esiste un file index.html nelle sottocartelle
+        async function checkForIndexFile(path, lang) {
+          try {
+            const response = await fetch(`${path}/${lang}/index.html`, { method: 'HEAD' });
+            return response.ok;
+          } catch (error) {
+            return false;
+          }
+        }
+        
+        // Popola la sezione Versione Corrente
+        async function populateCurrentVersion() {
+          // Controlla se le versioni italiano e inglese esistono
+          const itExists = await checkForIndexFile('versione-corrente', 'it');
+          const enExists = await checkForIndexFile('versione-corrente', 'en');
+          
+          let html = '';
+          if (itExists || enExists) {
+            html += `<div class="item">`;
+            if (itExists) {
+              html += `<a class="language-link" href="versione-corrente/it/index.html">Italiano</a>`;
+            }
+            if (enExists) {
+              html += `<a class="language-link" href="versione-corrente/en/index.html">English</a>`;
+            }
+            html += `</div>`;
+          } else {
+            html = `<p class="no-item">Nessuna versione corrente disponibile</p>`;
+          }
+          
+          sections.versioneCorrente.innerHTML = html;
+        }
+        
+        // Popola la sezione Releases
+        async function populateReleases() {
+          const dirs = await getDirectoriesFromLinks();
+          const releases = dirs.releases;
+          
+          let html = '';
+          
+          if (releases.length > 0) {
+            // Ordina le release in ordine di versione (dalla più recente)
+            releases.sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true, sensitivity: 'base' }));
+            
+            for (const release of releases) {
+              const itExists = await checkForIndexFile(`releases/${release.name}`, 'it');
+              const enExists = await checkForIndexFile(`releases/${release.name}`, 'en');
+              
+              html += `
+              <div class="item">
+                <div class="item-title">${release.name}</div>`;
+              
+              if (itExists) {
+                html += `<a class="language-link" href="releases/${release.name}/it/index.html">Italiano</a>`;
+              }
+              
+              if (enExists) {
+                html += `<a class="language-link" href="releases/${release.name}/en/index.html">English</a>`;
+              }
+              
+              html += `</div>`;
+            }
+          } else {
+            html = `<p class="no-item">Nessuna release disponibile</p>`;
+          }
+          
+          sections.releases.innerHTML = html;
+        }
+        
+        // Popola la sezione Pull Requests
+        async function populatePRs() {
+          const dirs = await getDirectoriesFromLinks();
+          const prs = dirs.prs;
+          
+          let html = '';
+          
+          if (prs.length > 0) {
+            // Ordina le PR per numero (dal più recente)
+            prs.sort((a, b) => {
+              const numA = parseInt(a.name.replace(/^pr/i, ''), 10) || 0;
+              const numB = parseInt(b.name.replace(/^pr/i, ''), 10) || 0;
+              return numB - numA;
+            });
+            
+            for (const pr of prs) {
+              const itExists = await checkForIndexFile(`prs/${pr.name}`, 'it');
+              const enExists = await checkForIndexFile(`prs/${pr.name}`, 'en');
+              
+              html += `
+              <div class="item">
+                <div class="item-title">${pr.name}</div>`;
+              
+              if (itExists) {
+                html += `<a class="language-link" href="prs/${pr.name}/it/index.html">Italiano</a>`;
+              }
+              
+              if (enExists) {
+                html += `<a class="language-link" href="prs/${pr.name}/en/index.html">English</a>`;
+              }
+              
+              html += `</div>`;
+            }
+          } else {
+            html = `<p class="no-item">Nessuna pull request disponibile</p>`;
+          }
+          
+          sections.prs.innerHTML = html;
+        }
+        
+        // Esegui il popolamento parallelo delle sezioni
+        await Promise.all([
+          populateCurrentVersion(),
+          populateReleases(),
+          populatePRs()
+        ]);
+      } catch (error) {
+        console.error('Errore generale:', error);
+        document.getElementById('error-message').style.display = 'block';
+        document.getElementById('error-message').textContent = 'Si è verificato un errore durante il caricamento della struttura della documentazione.';
+      }
+    }
+  </script>
 </head>
 <body>
-<h1>EUDI Wallet docs</h1>
-
-<ul>
-  <li><a href="main/it/">Italian version</a></li>
-  <li><a href="main/en/">English version</a></li>
-</ul>
+  <h1>Documentazione del Progetto</h1>
+  
+  <div id="error-message" style="display: none; color: red; padding: 10px; background: #ffeeee; border: 1px solid #ffcccc; margin-bottom: 20px;"></div>
+  
+  <div class="section">
+    <h2>Versione Corrente</h2>
+    <div id="versione-corrente-content">
+      <p>Caricamento in corso...</p>
+    </div>
+  </div>
+  
+  <div class="section">
+    <h2>Releases</h2>
+    <div id="releases-content">
+      <p>Caricamento in corso...</p>
+    </div>
+  </div>
+  
+  <div class="section">
+    <h2>Pull Requests</h2>
+    <div id="prs-content">
+      <p>Caricamento in corso...</p>
+    </div>
+  </div>
+  
+  <footer style="margin-top: 50px; color: #666; font-size: 0.9em; text-align: center; border-top: 1px solid #eaecef; padding-top: 20px;">
+    Generato dinamicamente - Ultimo aggiornamento: <span id="last-update-date"></span>
+    <script>
+      document.getElementById('last-update-date').textContent = new Date().toLocaleDateString();
+    </script>
+  </footer>
 </body>
 </html>
