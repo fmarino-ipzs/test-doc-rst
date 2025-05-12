@@ -3,7 +3,7 @@ name: gh-pages
 on:
   push:
     branches:
-      - '*'
+      - 'versione-corrente'
     paths:
       - 'docs/**' # trigger only if there are changes in docs path
   pull_request:
