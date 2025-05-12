@@ -98,7 +98,7 @@ jobs:
 
       - name: Create root index.html
         run: |
-          #cp .github/workflow/template/index-template.html html/index.html
+          cp .github/workflows/index-template.html html/index.html
 
       - name: Deploy to GitHub Pages
         if: success()
