@@ -30,7 +30,7 @@ jobs:
   # This workflow contains a single job called "build"
   build:
     # The type of runner that the job will run on
-    if: github.ref_name == github.event.repository.default_branch
+    #if: github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
 
     # Steps represent a sequence of tasks that will be executed as part of the job
