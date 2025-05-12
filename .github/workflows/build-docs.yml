@@ -2,23 +2,20 @@ name: gh-pages
 
 on:
   push:
-    branches: ["*"]
-    paths-ignore:
-      - README.md
-      - CONTRIBUTING.md
-      - LICENSE.md
-      - .gitignore
+    branches:
+      - ${{ github.event.repository.default_branch }}  # Trigger on push only on default branch --> vesione-corrente
+    paths:
+      - 'docs/**' # trigger only if there are changes in docs path
   pull_request:
-    branches: ["*"]
-    paths-ignore:
-      - README.md
-      - CONTRIBUTING.md
-      - LICENSE.md
-      - .gitignore
+    types:
+      - opened
+      - synchronize
+      - reopened
+    paths:
+      - 'docs/**' # trigger only if there are changes in docs path
   release:
     types:
-      - created
-      - edited
+      - published
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -40,66 +37,111 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
 
+      # Install Python 
       - uses: actions/setup-python@v4
         with:
           python-version: "3.10" # Version range or exact version of a Python version to use, using SemVer's version range syntax
           architecture: "x64" # optional x64 or x86. Defaults to x64 if not specified
 
+      # Install Java
       - name: Setup Java
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
           java-version: '17'
 
+      # Install Graphviz required for plantuml
       - name: Install Graphviz
         run: |
           sudo apt-get update
           sudo apt-get install -y graphviz
 
+      # Install python dependancies 
       - name: Install deps
         run: |-
           python -m pip install -r requirements-dev.txt
 
-      - name: Build branch
-        run: |-
-          if [[ "$GITHUB_REF" = /refs/tags/* ]]; then
-            TAG=$(echo "$GITHUB_REF" | sed "s/\/refs\/tags\///")
-            SUBPATH="v$TAG/" # note the trailing slash
-            echo "Building for TAG: $SUBPATH"
-          else
-            SUBPATH=$(echo "$GITHUB_REF" | sed "s/refs\/heads\///") # "${GITHUB_HEAD_REF}/" # note the trailing slash
-            echo "Building for PR: $SUBPATH"
+      - name: Determine deployment path
+        id: deployment
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "path=prs/pr${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "release" ]]; then
+            TAG="${{ github.event.release.tag_name }}"
+            echo "path=releases/${TAG}" >> $GITHUB_OUTPUT
+          else 
+            # this is the case where we have a push on default branch, i.e "${{ github.ref }}" == "refs/heads/${{ github.event.repository.default_branch }}"
+            echo "path=${{ github.event.repository.default_branch }}" >> $GITHUB_OUTPUT
           fi
-          echo "Publishing $SUBPATH"
-          sphinx-build -b html docs/en/  html/$SUBPATH/en
-          sphinx-build -b html docs/it/  html/$SUBPATH/it
 
-      # Runs a single command using the runners shell
-      - name: Create GH page index
-        run: |-
-          touch html/.nojekyll
-          echo '
-          <html>
-          <head>
-            <title>EUDI Wallet docs</title>
-            <meta name="viewport" content="initial-scale=1.0">
-          </head>
-          <body>
-          <h1>EUDI Wallet docs</h1>
+          echo "Publishing $path"
 
-          <ul>
-            <li><a href="main/it/">Italian version</a></li>
-            <li><a href="main/en/">English version</a></li>
-          </ul>
-          </body>
-          </html>' > html/index.html
+      # # Run Sphinx build for HTML output
+      # - name: Build branch
+      #   run: |-
+        
+      #     # Debug information
+      #     echo "GitHub ref: $GITHUB_REF"
+      #     echo "GitHub head ref: $GITHUB_HEAD_REF"
+      #     echo "GitHub ref type: $GITHUB_REF_TYPE"
+      #     echo "Event name: ${{ github.event_name }}"
+          
+      #     # Determine path for content
+      #     if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+      #       # For tags, extract the version number and create a versioned folder
+      #       TAG=${GITHUB_REF#refs/}
+      #       SUBPATH="${TAG}" # e.g. tags/v1.0.0
+      #       echo "This is a tag build: $TAG"
+      #     elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+      #       # For pull requests, use the PR number
+      #       PR_NUMBER="${{ github.event.pull_request.number }}"
+      #       SUBPATH="prs/pr-${PR_NUMBER}" # e.g. prs/pr-53
+      #       echo "This is a PR build: $PR_NUMBER"
+      #     else
+      #       # For branch pushes, use the branch name
+      #       BRANCH=${GITHUB_REF#refs/heads/}
+      #       SUBPATH="${BRANCH}" # e.g. versione-corrente, warning-removal
+      #       echo "This is a branch build: $BRANCH"
+      #     fi
+          
+      #     echo "Publishing $SUBPATH"
+          
+      #     # Create output directories
+      #     mkdir -p "html/${SUBPATH}/it"
+      #     mkdir -p "html/${SUBPATH}/en"
 
-      - name: Deploy to GitHub Pages
-        if: success()
-        uses: crazy-max/ghaction-github-pages@v2
-        with:
-          target_branch: gh-pages
-          build_dir: html
-          keep_history: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #     echo "Publishing html/$SUBPATH/it"
+      #     echo "Publishing html/$SUBPATH/en"
+
+      #     sphinx-build -b html docs/it/ html/$SUBPATH/it
+      #     sphinx-build -b html docs/en/ html/$SUBPATH/en
+
+      # # Create main index.html
+      # - name: Create GH page index
+      #   run: |-
+      #     touch html/.nojekyll
+      #     echo '
+      #     <html>
+      #     <head>
+      #       <title>EUDI Wallet docs</title>
+      #       <meta name="viewport" content="initial-scale=1.0">
+      #     </head>
+      #     <body>
+      #     <h1>EUDI Wallet docs</h1>
+
+      #     <ul>
+      #       <li><a href="main/it/">Italian version</a></li>
+      #       <li><a href="main/en/">English version</a></li>
+      #     </ul>
+      #     </body>
+      #     </html>' > html/index.html
+
+      # - name: Deploy to GitHub Pages
+      #   if: success()
+      #   uses: crazy-max/ghaction-github-pages@v2
+      #   with:
+      #     target_branch: gh-pages
+      #     build_dir: html
+      #     keep_history: true
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
