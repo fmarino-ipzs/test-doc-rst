@@ -3,7 +3,7 @@ name: gh-pages
 on:
   push:
     branches:
-      - ${{ github.event.repository.default_branch }}  # Trigger on push only on default branch --> vesione-corrente
+      - 'versione-corrente' # Trigger on push only on default branch --> vesione-corrente
     paths:
       - 'docs/**' # trigger only if there are changes in docs path
   pull_request:
