@@ -60,9 +60,23 @@
       border-radius: 3px;
       font-family: monospace;
       font-size: 12px;
-      max-height: 200px;
+      max-height: 300px;
       overflow-y: auto;
       display: none;
+    }
+    .loading-spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-top-color: #0366d6;
+      animation: spin 1s ease-in-out infinite;
+      margin-right: 10px;
+      vertical-align: middle;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
   </style>
   <script>
@@ -93,6 +107,11 @@
 
     async function fetchDirectoryStructure() {
       try {
+        // Start the loading indicators
+        document.getElementById('versione-corrente-content').innerHTML = '<div class="loading-spinner"></div> Scanning...';
+        document.getElementById('releases-content').innerHTML = '<div class="loading-spinner"></div> Scanning...';
+        document.getElementById('prs-content').innerHTML = '<div class="loading-spinner"></div> Scanning...';
+        
         // References to DOM elements that will be populated
         const sections = {
           versioneCorrente: document.getElementById('versione-corrente-content'),
@@ -100,214 +119,383 @@
           prs: document.getElementById('prs-content')
         };
         
+        // Cache for valid subdirectories to reduce network requests
+        const validDirectoryCache = new Map();
+        
         /**
-         * Uses the most direct approach to discover subdirectories:
-         * 1. Start with known base directories (prs, releases)
-         * 2. Discover subdirectories by checking for language folders with index.html
+         * Main function that discovers subdirectories without any assumptions about naming patterns
+         * This uses a completely dynamic approach by:
+         * 1. Reading root subdirectories from the base path
+         * 2. Checking each of them for language subdirectories with index.html files
+         * 3. No hardcoded patterns - completely data-driven discovery
          */
-        async function getDirectoriesFromLinks() {
-          const knownDirs = {
-            'versione-corrente': ['versione-corrente'],
+        async function discoverSubdirectories() {
+          const structure = {
+            'versione-corrente': 'versione-corrente',
             'releases': [], 
             'prs': []
           };
           
+          debugLog("Starting dynamic directory discovery...");
+          
           try {
-            // Discover subdirectories for each known base directory
-            const baseDirectories = ['releases', 'prs'];
+            // First load the root structure to get the base directories
+            const rootDirs = await discoverRootStructure();
+            debugLog("Root structure:", rootDirs);
             
-            for (const baseDir of baseDirectories) {
-              debugLog(`Scanning ${baseDir} for subdirectories...`);
-              
-              // Discover subdirectories by trying a fetch on the base dir
-              // to get the listing (if directory listing is enabled)
-              const dirNamesFromListing = await tryGetDirectoryListingItems(baseDir);
-              
-              if (dirNamesFromListing.length > 0) {
-                debugLog(`Found ${dirNamesFromListing.length} potential subdirectories in ${baseDir} from directory listing`);
-                
-                // Check each potential subdirectory for language folders with index.html
-                for (const dirName of dirNamesFromListing) {
-                  if (await isValidSubdirectory(baseDir, dirName)) {
-                    knownDirs[baseDir].push({name: dirName});
-                    debugLog(`Confirmed ${baseDir}/${dirName} is a valid subdirectory`);
-                  }
-                }
-              } else {
-                debugLog(`No directory listing available for ${baseDir}, trying direct discovery...`);
-                
-                // // Since we couldn't get a directory listing, try to discover through direct checks
-                // const discoveredDirectories = await discoverSubdirectoriesDirectly(baseDir);
-                
-                // if (discoveredDirectories.length > 0) {
-                //   knownDirs[baseDir] = discoveredDirectories.map(name => ({name}));
-                //   debugLog(`Discovered ${discoveredDirectories.length} subdirectories in ${baseDir} through direct checks`);
-                // }
+            // For each root directory, check for valid subdirectories
+            if (rootDirs.includes('versione-corrente')) {
+              // Check if versione-corrente is a valid directory
+              if (await hasValidLanguageSubdirs('versione-corrente')) {
+                structure['versione-corrente'] = 'versione-corrente';
+                debugLog("Verified versione-corrente is valid");
               }
             }
             
-            debugLog('Final directory structure:', knownDirs);
+            if (rootDirs.includes('releases')) {
+              // Discover all subdirectories of releases
+              const releaseSubdirs = await discoverValidSubdirs('releases');
+              structure.releases = releaseSubdirs.map(name => ({ name }));
+              debugLog(`Found ${releaseSubdirs.length} release directories:`, releaseSubdirs);
+            }
+            
+            if (rootDirs.includes('prs')) {
+              // Discover all subdirectories of prs
+              const prSubdirs = await discoverValidSubdirs('prs');
+              structure.prs = prSubdirs.map(name => ({ name }));
+              debugLog(`Found ${prSubdirs.length} PR directories:`, prSubdirs);
+            }
           } catch (e) {
-            console.warn('Error during directory discovery:', e);
+            console.error('Error during dynamic discovery:', e);
           }
           
-          return knownDirs;
+          return structure;
         }
         
         /**
-         * Tries to get a directory listing and extract item names
-         * @param {string} path - Directory path to check
-         * @returns {string[]} - Array of item names found in the directory
+         * Discovers valid subdirectories of a given parent directory 
+         * by first getting all subdirs, and then checking each for language dirs
          */
-        async function tryGetDirectoryListingItems(path) {
+        async function discoverValidSubdirs(parentDir) {
+          // First try to get all subdirectories of the parent
+          const allSubdirs = await discoverSubdirNames(parentDir);
+          debugLog(`Found ${allSubdirs.length} potential subdirectories in ${parentDir}:`, allSubdirs);
+          
+          // Then filter only those that have valid language subdirectories
+          const validSubdirs = [];
+          
+          // Create a batch of promises to check all subdirectories in parallel
+          const subDirPromises = allSubdirs.map(async (subdir) => {
+            const fullPath = `${parentDir}/${subdir}`;
+            if (await hasValidLanguageSubdirs(fullPath)) {
+              validSubdirs.push(subdir);
+              debugLog(`Verified ${fullPath} is valid`);
+            }
+          });
+          
+          // Wait for all checks to complete
+          await Promise.all(subDirPromises);
+          
+          return validSubdirs;
+        }
+        
+        /**
+         * Checks if a directory has valid language subdirectories (en/it with index.html)
+         */
+        async function hasValidLanguageSubdirs(dirPath) {
+          // Check if at least one language folder contains an index.html
+          const itExists = await indexFileExists(`${dirPath}/it/index.html`);
+          if (itExists) return true;
+          
+          const enExists = await indexFileExists(`${dirPath}/en/index.html`);
+          return enExists;
+        }
+        
+        /**
+         * Discovers the root directory structure using a fetch approach
+         * Tries multiple discovery strategies and combines results
+         */
+        async function discoverRootStructure() {
+          const rootDirs = new Set();
+          
+          // Most reliable approach for GitHub Pages: try direct paths
+          // Since you mentioned versione-corrente, prs, and releases specifically
+          const knownRootDirs = ['versione-corrente', 'prs', 'releases'];
+          
+          // Check each known root directory in parallel
+          const dirPromises = knownRootDirs.map(async (dir) => {
+            // A directory is considered to exist if we can detect subdirectories
+            // or if it has valid language subdirectories
+            let exists = false;
+            
+            // Check if the directory has language subdirectories
+            if (await hasValidLanguageSubdirs(dir)) {
+              exists = true;
+              debugLog(`Confirmed ${dir} exists (has language subdirs)`);
+            } 
+            // Or try to detect subdirectories
+            else if (await hasAnyAccessibleSubdirs(dir)) {
+              exists = true;
+              debugLog(`Confirmed ${dir} exists (has subdirectories)`);
+            }
+            
+            if (exists) {
+              rootDirs.add(dir);
+            }
+          });
+          
+          // Wait for all directory checks to complete
+          await Promise.all(dirPromises);
+          
+          return Array.from(rootDirs);
+        }
+        
+        /**
+         * Checks if a directory has any accessible subdirectories
+         * This is used to verify a directory exists without knowing language subdirs
+         */
+        async function hasAnyAccessibleSubdirs(dirPath) {
+          // Try to discover subdirectories
+          const subdirs = await discoverSubdirNames(dirPath);
+          return subdirs.length > 0;
+        }
+        
+        /**
+         * Discovers subdirectory names of a given directory using multiple methods
+         * Completely dynamic - doesn't assume any naming pattern
+         */
+        async function discoverSubdirNames(dirPath) {
+          const subdirNames = new Set();
+          
+          // Try multiple discovery methods and combine results
           try {
-            const response = await fetch(path, { 
+            // Method 1: AJAX discovery via <a> tags
+            const subdirs1 = await discoverSubdirsViaAjax(dirPath);
+            subdirs1.forEach(name => subdirNames.add(name));
+            
+            // If we found subdirectories, return them
+            if (subdirNames.size > 0) {
+              return Array.from(subdirNames);
+            }
+            
+            // Method 2: Try to guess some subdirs from the page's HTML and links
+            // This is useful if directory listing is disabled but there are references in the page
+            const subdirs2 = await discoverSubdirsFromPage(dirPath);
+            subdirs2.forEach(name => subdirNames.add(name));
+            
+            // Method 3: Try to check for metadata files that might reveal directory structure
+            const subdirs3 = await discoverSubdirsFromMetadata(dirPath);
+            subdirs3.forEach(name => subdirNames.add(name));
+          } catch (e) {
+            debugLog(`Error discovering subdirectories of ${dirPath}:`, e);
+          }
+          
+          return Array.from(subdirNames);
+        }
+        
+        /**
+         * Attempts to discover subdirectories using AJAX
+         * This tries to access the directory and parse any links
+         */
+        async function discoverSubdirsViaAjax(dirPath) {
+          try {
+            // Try to fetch the directory
+            const response = await fetch(dirPath, {
               method: 'GET',
-              headers: { 'Accept': 'text/html' }
+              headers: { 'Accept': 'text/html' },
+              cache: 'no-store'
             });
             
             if (response.ok) {
               const html = await response.text();
               
-              // Check if this looks like a directory listing
+              // If we got a directory listing, parse it
               if (html.includes('<a href') && (
                   html.includes('Index of') || 
-                  html.includes('Directory listing') ||
+                  html.includes('Directory') || 
                   html.match(/href=["'][^"']+\/["']/)
                 )) {
-                // Extract directory names using regex
-                const dirNames = [];
-                const regex = new RegExp(`href=["']([^"'/]+)/?["']`, 'g');
-                let match;
+                // Use a DOM parser to find directory links
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const links = doc.querySelectorAll('a[href]');
                 
-                while ((match = regex.exec(html)) !== null) {
-                  const name = match[1];
-                  // Skip parent directories, hidden files, etc.
-                  if (name && name !== '..' && name !== '.' && 
-                      !name.includes('.') && !name.includes('?')) {
-                    dirNames.push(name);
+                const subdirs = [];
+                links.forEach(link => {
+                  const href = link.getAttribute('href');
+                  // Look for hrefs that end with / (directory) but aren't parent dirs
+                  if (href && href.endsWith('/') && 
+                      !href.includes('..') && href !== '../' && 
+                      !href.includes(':') && !href.includes('?')) {
+                    // Clean the directory name
+                    let dirName = href.replace(/\/+$/, '');
+                    if (dirName.includes('/')) {
+                      dirName = dirName.split('/').pop();
+                    }
+                    if (dirName && dirName !== '.' && dirName !== '..') {
+                      subdirs.push(dirName);
+                    }
                   }
-                }
+                });
                 
-                return dirNames;
+                debugLog(`Found ${subdirs.length} subdirectories in ${dirPath} via AJAX`);
+                return subdirs;
+              }
+            }
+          } catch (e) {
+            debugLog(`AJAX directory discovery failed for ${dirPath}:`, e);
+          }
+          
+          return [];
+        }
+        
+        /**
+         * Discovers subdirectories by analyzing the current page's HTML
+         * for links that might point to subdirectories
+         */
+        async function discoverSubdirsFromPage(dirPath) {
+          const subdirs = new Set();
+          
+          try {
+            // Look for any links in the current page that might point to subdirectories
+            // of the given directory
+            const regexPattern = new RegExp(`${dirPath}\\/([^\\/\\s"'.]+)`, 'g');
+            const html = document.documentElement.innerHTML;
+            let match;
+            
+            while ((match = regexPattern.exec(html)) !== null) {
+              if (match[1] && match[1] !== '.' && match[1] !== '..') {
+                subdirs.add(match[1]);
               }
             }
             
-            return [];
-          } catch (error) {
-            debugLog(`Error fetching directory listing: ${error.message}`);
-            return [];
+            // Also check for links in the page
+            const links = document.querySelectorAll(`a[href*="${dirPath}/"]`);
+            links.forEach(link => {
+              const href = link.getAttribute('href');
+              const match = href.match(new RegExp(`${dirPath}\\/([^\\/\\s"'.]+)`));
+              if (match && match[1] && match[1] !== '.' && match[1] !== '..') {
+                subdirs.add(match[1]);
+              }
+            });
+          } catch (e) {
+            debugLog(`Page analysis failed for ${dirPath}:`, e);
           }
+          
+          return Array.from(subdirs);
         }
         
         /**
-         * Checks if a directory is a valid subdirectory by verifying it contains language folders with index.html
-         * @param {string} baseDir - Base directory (prs or releases)
-         * @param {string} dirName - Subdirectory name to check
-         * @returns {boolean} - True if it's a valid subdirectory
+         * Tries to discover subdirectories from metadata files
+         * that might exist in the repository
          */
-        async function isValidSubdirectory(baseDir, dirName) {
-          const path = `${baseDir}/${dirName}`;
+        async function discoverSubdirsFromMetadata(dirPath) {
+          const subdirs = new Set();
           
-          // Check if at least one language folder contains an index.html
-          const itExists = await checkForIndexFile(path, 'it');
-          const enExists = await checkForIndexFile(path, 'en');
-          
-          // Directory is valid if at least one language folder has an index.html
-          return itExists || enExists;
-        }
-        
-        /**
-         * Discovers subdirectories directly by iteratively checking for the existence
-         * of index.html files in language folders within potential subdirectories
-         * @param {string} baseDir - Base directory (prs or releases)
-         * @returns {string[]} - Array of discovered subdirectory names
-         */
-        async function discoverSubdirectoriesDirectly(baseDir) {
-          const discoveredDirs = [];
-          
-          // For pull requests, check pr1, pr2, pr3, etc.
-          if (baseDir === 'prs') {
-            // This approach directly checks if common PR patterns exist by looking for index.html files
-            for (let i = 1; i <= 100; i++) { // Check up to PR100
-              const dirName = `pr${i}`;
-              const path = `${baseDir}/${dirName}`;
-              
-              if (i % 10 === 0) {
-                debugLog(`Checking PRs up to ${i}...`);
-              }
-              
-              if (await isValidSubdirectory(baseDir, dirName)) {
-                discoveredDirs.push(dirName);
-                debugLog(`Found PR: ${dirName}`);
-              }
-            }
-          } 
-          // For releases, check common version patterns
-          else if (baseDir === 'releases') {
-            // Common version patterns to check
-            const versionPatterns = [
-              // Check numeric versions: 0.1, 0.2, 1.0, 1.1, etc.
-              ...generateVersionPatterns(),
-              // Named releases
-              'latest', 'stable', 'dev', 'beta', 'alpha', 'rc'
+          try {
+            // Try to fetch common metadata files that might list directories
+            const metadataFiles = [
+              '.index.json',
+              'index.json',
+              '.directory-list.json',
+              'directory-list.json',
+              'sitemap.xml'
             ];
             
-            for (const pattern of versionPatterns) {
-              if (await isValidSubdirectory(baseDir, pattern)) {
-                discoveredDirs.push(pattern);
-                debugLog(`Found release: ${pattern}`);
+            for (const file of metadataFiles) {
+              try {
+                const response = await fetch(`${dirPath}/${file}`, {
+                  method: 'GET',
+                  cache: 'no-store'
+                });
+                
+                if (response.ok) {
+                  const contentType = response.headers.get('content-type');
+                  
+                  if (contentType && contentType.includes('json')) {
+                    // Parse JSON metadata
+                    const data = await response.json();
+                    
+                    // Look for directory listings in various formats
+                    if (Array.isArray(data)) {
+                      data.forEach(item => {
+                        if (typeof item === 'string') {
+                          subdirs.add(item);
+                        } else if (item && typeof item.name === 'string') {
+                          subdirs.add(item.name);
+                        }
+                      });
+                    } else if (data && typeof data === 'object') {
+                      // Look for directory listings in objects
+                      if (data.directories && Array.isArray(data.directories)) {
+                        data.directories.forEach(dir => {
+                          if (typeof dir === 'string') {
+                            subdirs.add(dir);
+                          } else if (dir && typeof dir.name === 'string') {
+                            subdirs.add(dir.name);
+                          }
+                        });
+                      }
+                    }
+                  } else if (contentType && contentType.includes('xml')) {
+                    // Parse XML metadata (like sitemaps)
+                    const text = await response.text();
+                    const parser = new DOMParser();
+                    const xml = parser.parseFromString(text, 'text/xml');
+                    
+                    // Look for URLs in the sitemap
+                    const urls = xml.querySelectorAll('url > loc');
+                    urls.forEach(url => {
+                      const urlText = url.textContent;
+                      if (urlText.includes(`/${dirPath}/`)) {
+                        const match = urlText.match(new RegExp(`/${dirPath}/([^/]+)`));
+                        if (match && match[1]) {
+                          subdirs.add(match[1]);
+                        }
+                      }
+                    });
+                  }
+                }
+              } catch (e) {
+                // Silently continue to the next file
               }
             }
+          } catch (e) {
+            debugLog(`Metadata discovery failed for ${dirPath}:`, e);
           }
           
-          return discoveredDirs;
+          return Array.from(subdirs);
         }
         
         /**
-         * Generates common version patterns to check for releases
-         * @returns {string[]} - Array of version patterns
+         * Checks if a file exists using a HEAD request
+         * Uses caching to avoid redundant requests
          */
-        function generateVersionPatterns() {
-          const patterns = [];
-          
-          // Generate patterns like: 0.1, 0.2, ..., 1.0, 1.1, ...
-          for (let major = 0; major <= 5; major++) {
-            for (let minor = 0; minor <= 20; minor++) {
-              // Skip high minor versions for efficiency except for 0.x
-              if (major > 0 && minor > 10) continue;
-              
-              patterns.push(`${major}.${minor}`);
-              
-              // Also try with 'v' prefix
-              patterns.push(`v${major}.${minor}`);
-            }
+        async function indexFileExists(filePath) {
+          // Check cache first
+          if (validDirectoryCache.has(filePath)) {
+            return validDirectoryCache.get(filePath);
           }
           
-          return patterns;
-        }
-        
-        /**
-         * Tests if an index.html file exists at the specified path/language
-         */
-        async function checkForIndexFile(path, lang) {
           try {
             // Use HEAD request to check existence without downloading content
-            const url = `${path}/${lang}/index.html`;
+            const response = await fetch(filePath, { 
+              method: 'HEAD',
+              cache: 'no-store'
+            });
             
-            if (DEBUG_MODE && Math.random() < 0.1) { // Only log ~10% of checks
-              debugLog(`Checking file: ${url}`);
-            }
-            
-            const response = await fetch(url, { method: 'HEAD' });
             const exists = response.ok;
             
+            // Cache the result
+            validDirectoryCache.set(filePath, exists);
+            
             if (exists && DEBUG_MODE) {
-              debugLog(`File exists: ${url}`);
+              debugLog(`File exists: ${filePath}`);
             }
             
             return exists;
           } catch (error) {
+            validDirectoryCache.set(filePath, false);
             return false;
           }
         }
@@ -317,8 +505,8 @@
          */
         async function populateCurrentVersion() {
           // Check if Italian or English versions exist
-          const itExists = await checkForIndexFile('versione-corrente', 'it');
-          const enExists = await checkForIndexFile('versione-corrente', 'en');
+          const itExists = await indexFileExists('versione-corrente/it/index.html');
+          const enExists = await indexFileExists('versione-corrente/en/index.html');
           
           debugLog('Current version status:', { italian: itExists, english: enExists });
           
@@ -343,8 +531,8 @@
          * Populates the Releases section
          */
         async function populateReleases() {
-          const dirs = await getDirectoriesFromLinks();
-          const releases = dirs.releases;
+          const structure = await discoverSubdirectories();
+          const releases = structure.releases;
           
           debugLog('Populating releases:', releases);
           
@@ -355,10 +543,8 @@
             releases.sort((a, b) => compareVersions(b.name, a.name));
             
             for (const release of releases) {
-              const itExists = await checkForIndexFile(`releases/${release.name}`, 'it');
-              const enExists = await checkForIndexFile(`releases/${release.name}`, 'en');
-              
-              debugLog(`Release ${release.name} status:`, { italian: itExists, english: enExists });
+              const itExists = await indexFileExists(`releases/${release.name}/it/index.html`);
+              const enExists = await indexFileExists(`releases/${release.name}/en/index.html`);
               
               html += `
               <div class="item">
@@ -398,52 +584,66 @@
             return 0;
           }
           
-          // Remove 'v' prefix if present
-          const cleanA = a.replace(/^v/i, '');
-          const cleanB = b.replace(/^v/i, '');
+          // Try to detect version numbers in the string
+          const versionRegex = /(\d+(\.\d+)*)/;
+          const matchA = a.match(versionRegex);
+          const matchB = b.match(versionRegex);
           
-          // Split into components
-          const partsA = cleanA.split('.').map(p => parseInt(p, 10) || 0);
-          const partsB = cleanB.split('.').map(p => parseInt(p, 10) || 0);
-          
-          // Ensure both have same number of components
-          while (partsA.length < partsB.length) partsA.push(0);
-          while (partsB.length < partsA.length) partsB.push(0);
-          
-          // Compare each component
-          for (let i = 0; i < partsA.length; i++) {
-            if (partsA[i] !== partsB[i]) {
-              return partsA[i] - partsB[i];
+          // If both strings contain version numbers, compare them
+          if (matchA && matchB) {
+            const verA = matchA[1];
+            const verB = matchB[1];
+            
+            // Split into components
+            const partsA = verA.split('.').map(p => parseInt(p, 10) || 0);
+            const partsB = verB.split('.').map(p => parseInt(p, 10) || 0);
+            
+            // Ensure both have same number of components
+            while (partsA.length < partsB.length) partsA.push(0);
+            while (partsB.length < partsA.length) partsB.push(0);
+            
+            // Compare each component
+            for (let i = 0; i < partsA.length; i++) {
+              if (partsA[i] !== partsB[i]) {
+                return partsA[i] - partsB[i];
+              }
             }
+            
+            return 0;
           }
           
-          return 0;
+          // If version numbers not found or unable to compare, sort alphabetically
+          return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
         }
         
         /**
          * Populates the Pull Requests section
          */
         async function populatePRs() {
-          const dirs = await getDirectoriesFromLinks();
-          const prs = dirs.prs;
+          const structure = await discoverSubdirectories();
+          const prs = structure.prs;
           
           debugLog('Populating PRs:', prs);
           
           let html = '';
           
           if (prs.length > 0) {
-            // Sort PRs by number (newest first)
+            // Sort PRs by number if they have a number pattern, otherwise sort alphabetically
             prs.sort((a, b) => {
-              const numA = parseInt(a.name.replace(/^pr/i, ''), 10) || 0;
-              const numB = parseInt(b.name.replace(/^pr/i, ''), 10) || 0;
-              return numB - numA;
+              const numRegex = /\d+/;
+              const numA = a.name.match(numRegex);
+              const numB = b.name.match(numRegex);
+              
+              if (numA && numB) {
+                return parseInt(numB[0], 10) - parseInt(numA[0], 10);
+              }
+              
+              return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
             });
             
             for (const pr of prs) {
-              const itExists = await checkForIndexFile(`prs/${pr.name}`, 'it');
-              const enExists = await checkForIndexFile(`prs/${pr.name}`, 'en');
-              
-              debugLog(`PR ${pr.name} status:`, { italian: itExists, english: enExists });
+              const itExists = await indexFileExists(`prs/${pr.name}/it/index.html`);
+              const enExists = await indexFileExists(`prs/${pr.name}/en/index.html`);
               
               html += `
               <div class="item">
