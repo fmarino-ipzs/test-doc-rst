@@ -146,10 +146,7 @@ jobs:
                 # Check if PR number is in active PRs list
                 if ! echo "$ACTIVE_PRS" | grep -q "$PR_NUM"; then
                   echo "PR #$PR_NUM is not active, removing directory $PR_DIR"
-                  #rm -rf "$PR_DIR"
-                  find "$PR_DIR" -type f -delete
-                  find "$PR_DIR" -type d -empty -delete
-                  
+                  rm -rf "$PR_DIR"    
                   
                   if [ -d "$PR_DIR" ]; then
                     echo "WARNING: Directory $PR_DIR still exists after removal attempt!"
