@@ -77,42 +77,42 @@ def scan_directory(base_path='.'):
     
     return structure
 
-def sort_prs(prs):
-    """Sort PR directories by PR number in descending order."""
-    def get_pr_number(pr):
-        # Extract number from pr name (e.g., 'pr12' -> 12)
-        match = re.search(r'\d+', pr)
-        if match:
-            return int(match.group())
-        return 0  # Default if no number is found
+# def sort_prs(prs):
+#     """Sort PR directories by PR number in descending order."""
+#     def get_pr_number(pr):
+#         # Extract number from pr name (e.g., 'pr12' -> 12)
+#         match = re.search(r'\d+', pr)
+#         if match:
+#             return int(match.group())
+#         return 0  # Default if no number is found
     
-    return sorted(prs, key=get_pr_number, reverse=True)
+#     return sorted(prs, key=get_pr_number, reverse=True)
 
-def sort_releases(releases):
-    """Sort releases by version number in descending order (newest first)."""
-    def parse_version(version):
-        # Handle special cases
-        if version in ['latest', 'stable']:
-            return (float('inf'), float('inf'), float('inf'))  # Always at the top
+# def sort_releases(releases):
+#     """Sort releases by version number in descending order (newest first)."""
+#     def parse_version(version):
+#         # Handle special cases
+#         if version in ['latest', 'stable']:
+#             return (float('inf'), float('inf'), float('inf'))  # Always at the top
         
-        # Remove 'v' prefix if present
-        clean_version = version.lower().lstrip('v')
+#         # Remove 'v' prefix if present
+#         clean_version = version.lower().lstrip('v')
         
-        # Split by dots and convert to integers
-        parts = []
-        for part in clean_version.split('.'):
-            try:
-                parts.append(int(part))
-            except ValueError:
-                parts.append(0)  # Non-numeric parts become 0
+#         # Split by dots and convert to integers
+#         parts = []
+#         for part in clean_version.split('.'):
+#             try:
+#                 parts.append(int(part))
+#             except ValueError:
+#                 parts.append(0)  # Non-numeric parts become 0
         
-        # Ensure we have at least 3 parts (major.minor.patch)
-        while len(parts) < 3:
-            parts.append(0)
+#         # Ensure we have at least 3 parts (major.minor.patch)
+#         while len(parts) < 3:
+#             parts.append(0)
             
-        return tuple(parts)
+#         return tuple(parts)
     
-    return sorted(releases, key=parse_version, reverse=True)
+#     return sorted(releases, key=parse_version, reverse=True)
 
 def generate_html(structure):
     """Generate HTML content based on the structure."""
@@ -202,9 +202,10 @@ def generate_html(structure):
 '''
     if structure['releases']:
         # Sort releases with newest first
-        sorted_releases = sort_releases(structure['releases'].keys())
+        #sorted_releases = sort_releases(structure['releases'].keys())
+        releases = structure['releases'].keys()
         
-        for release in sorted_releases:
+        for release in releases:
             languages = structure['releases'][release]['languages']
             html += f'    <div class="item">\n'
             html += f'      <div class="item-title">{release}</div>\n'
@@ -225,9 +226,10 @@ def generate_html(structure):
 '''
     if structure['prs']:
         # Sort PRs with newest/highest number first
-        sorted_prs = sort_prs(structure['prs'].keys())
+        #sorted_prs = sort_prs(structure['prs'].keys())
+        prs = structure['prs'].keys()
         
-        for pr in sorted_prs:
+        for pr in prs:
             languages = structure['prs'][pr]['languages']
             html += f'    <div class="item">\n'
             html += f'      <div class="item-title">{pr}</div>\n'
