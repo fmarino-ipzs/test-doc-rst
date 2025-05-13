@@ -101,8 +101,9 @@
         };
         
         /**
-         * Gets the directory structure by intelligently scanning the page components
-         * This uses only smart scanning techniques, no brute force
+         * Uses the most direct approach to discover subdirectories:
+         * 1. Start with known base directories (prs, releases)
+         * 2. Discover subdirectories by checking for language folders with index.html
          */
         async function getDirectoriesFromLinks() {
           const knownDirs = {
@@ -112,253 +113,178 @@
           };
           
           try {
-            // Get directories by inspecting the DOM and using XHR-based directory detection
-            await scanDirectoriesFromDOM(knownDirs);
+            // Discover subdirectories for each known base directory
+            const baseDirectories = ['releases', 'prs'];
             
-            // Try a secondary approach: scan the page tree with the data we can access
-            if (knownDirs.releases.length === 0 && knownDirs.prs.length === 0) {
-              await scanDirectoriesFromIndexPages(knownDirs);
+            for (const baseDir of baseDirectories) {
+              debugLog(`Scanning ${baseDir} for subdirectories...`);
+              
+              // Discover subdirectories by trying a fetch on the base dir
+              // to get the listing (if directory listing is enabled)
+              const dirNamesFromListing = await tryGetDirectoryListingItems(baseDir);
+              
+              if (dirNamesFromListing.length > 0) {
+                debugLog(`Found ${dirNamesFromListing.length} potential subdirectories in ${baseDir} from directory listing`);
+                
+                // Check each potential subdirectory for language folders with index.html
+                for (const dirName of dirNamesFromListing) {
+                  if (await isValidSubdirectory(baseDir, dirName)) {
+                    knownDirs[baseDir].push({name: dirName});
+                    debugLog(`Confirmed ${baseDir}/${dirName} is a valid subdirectory`);
+                  }
+                }
+              } else {
+                debugLog(`No directory listing available for ${baseDir}, trying direct discovery...`);
+                
+                // Since we couldn't get a directory listing, try to discover through direct checks
+                const discoveredDirectories = await discoverSubdirectoriesDirectly(baseDir);
+                
+                if (discoveredDirectories.length > 0) {
+                  knownDirs[baseDir] = discoveredDirectories.map(name => ({name}));
+                  debugLog(`Discovered ${discoveredDirectories.length} subdirectories in ${baseDir} through direct checks`);
+                }
+              }
             }
             
-            debugLog('Found directories:', knownDirs);
+            debugLog('Final directory structure:', knownDirs);
           } catch (e) {
-            console.warn('Error scanning directories:', e);
+            console.warn('Error during directory discovery:', e);
           }
           
           return knownDirs;
         }
-
+        
         /**
-         * Scans directories by looking at page elements and links
+         * Tries to get a directory listing and extract item names
+         * @param {string} path - Directory path to check
+         * @returns {string[]} - Array of item names found in the directory
          */
-        async function scanDirectoriesFromDOM(knownDirs) {
-          debugLog('Scanning directories from DOM...');
-          
-          // 1. Look for existing links in the page that might point to directories
-          const links = document.querySelectorAll('a[href]');
-          const dirPaths = new Set();
-          
-          links.forEach(link => {
-            const href = link.getAttribute('href');
-            // Check for links that might point to our directory structure
-            if (href) {
-              // Releases pattern detection
-              const releaseMatch = href.match(/releases\/([^\/]+)/);
-              if (releaseMatch && releaseMatch[1]) {
-                dirPaths.add(['releases', releaseMatch[1]]);
-              }
-              
-              // PRs pattern detection
-              const prMatch = href.match(/prs\/([^\/]+)/);
-              if (prMatch && prMatch[1]) {
-                dirPaths.add(['prs', prMatch[1]]);
-              }
-            }
-          });
-          
-          // 2. Check each potential directory path
-          for (const [dirType, dirName] of dirPaths) {
-            if (await checkDirectoryExists(`${dirType}/${dirName}`)) {
-              knownDirs[dirType].push({name: dirName});
-              debugLog(`Found ${dirType}/${dirName} from page links`);
-            }
-          }
-        }
-
-        /**
-         * Uses a more advanced technique to scan for directory listings
-         * by fetching known index locations
-         */
-        async function scanDirectoriesFromIndexPages(knownDirs) {
-          debugLog('Scanning directories from index pages...');
-          
-          // Directories we want to scan
-          const baseDirectories = ['releases', 'prs'];
-          
-          for (const baseDir of baseDirectories) {
-            // Try to fetch the directory listing
-            const html = await fetchDirectoryIndex(baseDir);
-            
-            if (html) {
-              // We found a directory index! Extract directory names
-              const directoryNames = extractDirectoryNamesFromHTML(html, baseDir);
-              debugLog(`Found directory index for ${baseDir}, extracted:`, directoryNames);
-              
-              // Verify each directory actually exists by checking for index files
-              for (const dirName of directoryNames) {
-                if (await checkDirectoryExists(`${baseDir}/${dirName}`)) {
-                  knownDirs[baseDir].push({name: dirName});
-                  debugLog(`Verified ${baseDir}/${dirName} exists`);
-                }
-              }
-            } else {
-              // Try an alternative approach - check for /dir/ pattern in current document
-              debugLog(`No directory index found for ${baseDir}, trying HTML structure analysis`);
-              const foundDirs = analyzeHTMLStructure(document.documentElement.innerHTML, baseDir);
-              
-              for (const dirName of foundDirs) {
-                if (await checkDirectoryExists(`${baseDir}/${dirName}`)) {
-                  knownDirs[baseDir].push({name: dirName});
-                  debugLog(`Found ${baseDir}/${dirName} from HTML analysis`);
-                }
-              }
-            }
-          }
-        }
-
-        /**
-         * Advanced method to extract directory names from raw HTML
-         * using regex patterns commonly found in directory listings
-         */
-        function analyzeHTMLStructure(html, baseDir) {
-          const foundDirs = new Set();
-          
-          // Common patterns for directory links
-          const patterns = [
-            // GitHub Pages directory pattern
-            new RegExp(`href=["']\\/${baseDir}\\/([^\\/"\\']+)`, 'g'),
-            // Common directory index pattern
-            new RegExp(`href=["']([^\\/"\\']+)\\/["']`, 'g'),
-            // Alternative pattern with path
-            new RegExp(`${baseDir}\\/([^\\/\\s"']+)`, 'g')
-          ];
-          
-          for (const pattern of patterns) {
-            let match;
-            while ((match = pattern.exec(html)) !== null) {
-              if (match[1] && !match[1].includes('.') && !match[1].includes('?')) {
-                foundDirs.add(match[1]);
-              }
-            }
-          }
-          
-          return [...foundDirs];
-        }
-
-        /**
-         * Tries to fetch a directory index page
-         * @returns {string|null} HTML content or null if not found
-         */
-        async function fetchDirectoryIndex(path) {
+        async function tryGetDirectoryListingItems(path) {
           try {
-            // Try different possible index endpoints
-            const endpoints = ['', 'index.html'];
+            const response = await fetch(path, { 
+              method: 'GET',
+              headers: { 'Accept': 'text/html' }
+            });
             
-            for (const endpoint of endpoints) {
-              const url = `${path}/${endpoint}`;
-              debugLog(`Fetching directory index from: ${url}`);
+            if (response.ok) {
+              const html = await response.text();
               
-              try {
-                const response = await fetch(url, { 
-                  method: 'GET',
-                  headers: { 'Accept': 'text/html' }
-                });
+              // Check if this looks like a directory listing
+              if (html.includes('<a href') && (
+                  html.includes('Index of') || 
+                  html.includes('Directory listing') ||
+                  html.match(/href=["'][^"']+\/["']/)
+                )) {
+                // Extract directory names using regex
+                const dirNames = [];
+                const regex = new RegExp(`href=["']([^"'/]+)/?["']`, 'g');
+                let match;
                 
-                if (response.ok) {
-                  const contentType = response.headers.get('content-type');
-                  if (contentType && contentType.includes('text/html')) {
-                    const html = await response.text();
-                    
-                    // Check if this looks like a directory listing
-                    if (html.includes('<a href') && (
-                        html.includes('Directory') || 
-                        html.includes('Index of') || 
-                        html.includes('folder') ||
-                        html.match(/href=["'][^"']+\/["']/)
-                      )) {
-                      debugLog(`Found potential directory listing at ${url}`);
-                      return html;
-                    }
+                while ((match = regex.exec(html)) !== null) {
+                  const name = match[1];
+                  // Skip parent directories, hidden files, etc.
+                  if (name && name !== '..' && name !== '.' && 
+                      !name.includes('.') && !name.includes('?')) {
+                    dirNames.push(name);
                   }
                 }
-              } catch (e) {
-                debugLog(`Error fetching ${url}:`, e.message);
-              }
-            }
-            
-            return null;
-          } catch (error) {
-            debugLog(`Error in fetchDirectoryIndex: ${error.message}`);
-            return null;
-          }
-        }
-
-        /**
-         * Extracts directory names from HTML directory listings
-         * @param {string} html - HTML content
-         * @param {string} baseDir - Base directory ('releases' or 'prs')
-         * @returns {string[]} - Directory names
-         */
-        function extractDirectoryNamesFromHTML(html, baseDir) {
-          if (!html) return [];
-          
-          const directories = new Set();
-          
-          // Method 1: DOM parsing
-          try {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            
-            // Get all links that look like directories
-            const links = doc.querySelectorAll('a');
-            
-            links.forEach(link => {
-              const href = link.getAttribute('href');
-              // Common patterns for directory links
-              if (href && (
-                  href.endsWith('/') || 
-                  link.textContent.includes('Directory') ||
-                  link.parentElement?.textContent.includes('Directory') ||
-                  link.classList.contains('directory')
-                )) {
-                // Clean up the directory name
-                let dirName = href.replace(/\/+$/, ''); // Remove trailing slashes
-                dirName = dirName.split('/').pop(); // Get the last path component
                 
-                // Skip parent directory links and empty names
-                if (dirName && dirName !== '..' && dirName !== '.' && 
-                    !dirName.includes('.') && !dirName.includes('?')) {
-                  directories.add(dirName);
-                }
+                return dirNames;
               }
-            });
-          } catch (e) {
-            debugLog('Error parsing HTML:', e.message);
-          }
-          
-          // Method 2: Regex patterns (backup method)
-          // Look for href="dirname/" patterns
-          const regex = new RegExp(`href=["']([^"'/?]+)\\/?["']`, 'g');
-          let match;
-          while ((match = regex.exec(html)) !== null) {
-            const dirName = match[1];
-            if (dirName && dirName !== '..' && dirName !== '.' && 
-                !dirName.includes('.') && !dirName.includes('?')) {
-              directories.add(dirName);
             }
-          }
-          
-          // Method 3: Specific pattern for the given base directory
-          const specificRegex = new RegExp(`${baseDir}\\/([^\\/\\s"'.?]+)`, 'g');
-          while ((match = specificRegex.exec(html)) !== null) {
-            if (match[1] && match[1] !== '..' && match[1] !== '.') {
-              directories.add(match[1]);
-            }
-          }
-          
-          return [...directories];
-        }
-
-        /**
-         * Checks if a directory exists by testing if it contains index files
-         */
-        async function checkDirectoryExists(path) {
-          try {
-            // Check if either Italian or English index exists
-            return (await checkForIndexFile(path, 'it')) || (await checkForIndexFile(path, 'en'));
+            
+            return [];
           } catch (error) {
-            return false;
+            debugLog(`Error fetching directory listing: ${error.message}`);
+            return [];
           }
+        }
+        
+        /**
+         * Checks if a directory is a valid subdirectory by verifying it contains language folders with index.html
+         * @param {string} baseDir - Base directory (prs or releases)
+         * @param {string} dirName - Subdirectory name to check
+         * @returns {boolean} - True if it's a valid subdirectory
+         */
+        async function isValidSubdirectory(baseDir, dirName) {
+          const path = `${baseDir}/${dirName}`;
+          
+          // Check if at least one language folder contains an index.html
+          const itExists = await checkForIndexFile(path, 'it');
+          const enExists = await checkForIndexFile(path, 'en');
+          
+          // Directory is valid if at least one language folder has an index.html
+          return itExists || enExists;
+        }
+        
+        /**
+         * Discovers subdirectories directly by iteratively checking for the existence
+         * of index.html files in language folders within potential subdirectories
+         * @param {string} baseDir - Base directory (prs or releases)
+         * @returns {string[]} - Array of discovered subdirectory names
+         */
+        async function discoverSubdirectoriesDirectly(baseDir) {
+          const discoveredDirs = [];
+          
+          // For pull requests, check pr1, pr2, pr3, etc.
+          if (baseDir === 'prs') {
+            // This approach directly checks if common PR patterns exist by looking for index.html files
+            for (let i = 1; i <= 100; i++) { // Check up to PR100
+              const dirName = `pr${i}`;
+              const path = `${baseDir}/${dirName}`;
+              
+              if (i % 10 === 0) {
+                debugLog(`Checking PRs up to ${i}...`);
+              }
+              
+              if (await isValidSubdirectory(baseDir, dirName)) {
+                discoveredDirs.push(dirName);
+                debugLog(`Found PR: ${dirName}`);
+              }
+            }
+          } 
+          // For releases, check common version patterns
+          else if (baseDir === 'releases') {
+            // Common version patterns to check
+            const versionPatterns = [
+              // Check numeric versions: 0.1, 0.2, 1.0, 1.1, etc.
+              ...generateVersionPatterns(),
+              // Named releases
+              'latest', 'stable', 'dev', 'beta', 'alpha', 'rc'
+            ];
+            
+            for (const pattern of versionPatterns) {
+              if (await isValidSubdirectory(baseDir, pattern)) {
+                discoveredDirs.push(pattern);
+                debugLog(`Found release: ${pattern}`);
+              }
+            }
+          }
+          
+          return discoveredDirs;
+        }
+        
+        /**
+         * Generates common version patterns to check for releases
+         * @returns {string[]} - Array of version patterns
+         */
+        function generateVersionPatterns() {
+          const patterns = [];
+          
+          // Generate patterns like: 0.1, 0.2, ..., 1.0, 1.1, ...
+          for (let major = 0; major <= 5; major++) {
+            for (let minor = 0; minor <= 20; minor++) {
+              // Skip high minor versions for efficiency except for 0.x
+              if (major > 0 && minor > 10) continue;
+              
+              patterns.push(`${major}.${minor}`);
+              
+              // Also try with 'v' prefix
+              patterns.push(`v${major}.${minor}`);
+            }
+          }
+          
+          return patterns;
         }
         
         /**
@@ -369,8 +295,7 @@
             // Use HEAD request to check existence without downloading content
             const url = `${path}/${lang}/index.html`;
             
-            // Only log in verbose debug mode to avoid console flooding
-            if (DEBUG_MODE) {
+            if (DEBUG_MODE && Math.random() < 0.1) { // Only log ~10% of checks
               debugLog(`Checking file: ${url}`);
             }
             
@@ -427,7 +352,7 @@
           
           if (releases.length > 0) {
             // Sort releases by semantic version (newest first)
-            releases.sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true, sensitivity: 'base' }));
+            releases.sort((a, b) => compareVersions(b.name, a.name));
             
             for (const release of releases) {
               const itExists = await checkForIndexFile(`releases/${release.name}`, 'it');
@@ -454,6 +379,45 @@
           }
           
           sections.releases.innerHTML = html;
+        }
+        
+        /**
+         * Compares semantic versions for sorting
+         * Handles various version formats (1.0, v1.0, etc.)
+         */
+        function compareVersions(a, b) {
+          // Handle special named versions
+          const specialVersions = ['latest', 'stable', 'beta', 'alpha', 'rc', 'dev'];
+          if (specialVersions.includes(a) || specialVersions.includes(b)) {
+            if (a === 'latest' || a === 'stable') return -1;
+            if (b === 'latest' || b === 'stable') return 1;
+            if (a === 'beta') return -1;
+            if (b === 'beta') return 1;
+            if (a === 'rc') return -1;
+            if (b === 'rc') return 1;
+            return 0;
+          }
+          
+          // Remove 'v' prefix if present
+          const cleanA = a.replace(/^v/i, '');
+          const cleanB = b.replace(/^v/i, '');
+          
+          // Split into components
+          const partsA = cleanA.split('.').map(p => parseInt(p, 10) || 0);
+          const partsB = cleanB.split('.').map(p => parseInt(p, 10) || 0);
+          
+          // Ensure both have same number of components
+          while (partsA.length < partsB.length) partsA.push(0);
+          while (partsB.length < partsA.length) partsB.push(0);
+          
+          // Compare each component
+          for (let i = 0; i < partsA.length; i++) {
+            if (partsA[i] !== partsB[i]) {
+              return partsA[i] - partsB[i];
+            }
+          }
+          
+          return 0;
         }
         
         /**
