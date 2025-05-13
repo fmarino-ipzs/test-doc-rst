@@ -136,13 +136,13 @@
               } else {
                 debugLog(`No directory listing available for ${baseDir}, trying direct discovery...`);
                 
-                // Since we couldn't get a directory listing, try to discover through direct checks
-                const discoveredDirectories = await discoverSubdirectoriesDirectly(baseDir);
+                // // Since we couldn't get a directory listing, try to discover through direct checks
+                // const discoveredDirectories = await discoverSubdirectoriesDirectly(baseDir);
                 
-                if (discoveredDirectories.length > 0) {
-                  knownDirs[baseDir] = discoveredDirectories.map(name => ({name}));
-                  debugLog(`Discovered ${discoveredDirectories.length} subdirectories in ${baseDir} through direct checks`);
-                }
+                // if (discoveredDirectories.length > 0) {
+                //   knownDirs[baseDir] = discoveredDirectories.map(name => ({name}));
+                //   debugLog(`Discovered ${discoveredDirectories.length} subdirectories in ${baseDir} through direct checks`);
+                // }
               }
             }
             
