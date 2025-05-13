@@ -117,7 +117,43 @@ jobs:
           uses: actions/checkout@v3
           with:
             ref: gh-pages  # Checkout the gh-pages branch
+
+        # Clean up old PR directories
+        - name: Clean up old PR directories
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          run: |
+            # Check if prs directory exists
+            if [ ! -d "prs" ]; then
+              echo "The prs directory does not exist. Nothing to clean."
+              exit 0
+            fi
             
+            # Get list of active (open) PRs
+            echo "Getting list of active PRs..."
+            ACTIVE_PRS=$(gh pr list --state open --json number --repo $GITHUB_REPOSITORY | jq -r '.[].number')
+            echo "Active PR numbers: $ACTIVE_PRS"
+            
+            # Initialize counter for removed directories
+            REMOVED_COUNT=0
+            
+            # Check each PR directory
+            for PR_DIR in prs/pr*; do
+              if [ -d "$PR_DIR" ]; then
+                # Extract PR number from directory name
+                PR_NUM=$(echo "$PR_DIR" | grep -o -E 'pr[0-9]+' | sed 's/pr//')
+                
+                # Check if PR number is in active PRs list
+                if ! echo "$ACTIVE_PRS" | grep -q "$PR_NUM"; then
+                  echo "PR #$PR_NUM is not active, removing directory $PR_DIR"
+                  rm -rf "$PR_DIR"
+                  REMOVED_COUNT=$((REMOVED_COUNT+1))
+                fi
+              fi
+            done
+            
+            echo "Removed $REMOVED_COUNT PR directories that were no longer active."
+                
         # Install Python
         - uses: actions/setup-python@v4
           with:
