@@ -23,7 +23,7 @@ on:
 # Allow one concurrent deployment
 concurrency:
   group: "pages"
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -168,6 +168,8 @@ jobs:
             
         # Run the Python script
         - name: Run the Python script for cleanup and index generation
+          env:
+            GH_TOKEN: ${{ github.token }}
           run: |
             # Run the Python scripts 
             python cleanup_old_prs.py
