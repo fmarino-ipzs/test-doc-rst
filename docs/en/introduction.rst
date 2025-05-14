@@ -5,6 +5,7 @@ This document serves as an initial guide to the testing procedures employed for 
 Furthermore, it aims to serve as a reference point for the testing team, outlining the processes and standards to be followed throughout the testing lifecycle.
 This introductory section sets the stage for a more detailed exploration of the test environment, test cases, execution procedures, and reporting mechanisms that constitute the core of this document.
 
+
 The following diagram depicts the High Level Architecture.
 
 .. plantuml:: plantuml/solution-architecture.puml
