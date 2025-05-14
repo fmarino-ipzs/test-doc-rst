@@ -2,6 +2,34 @@ import os
 import re
 from pathlib import Path
 from datetime import datetime
+import subprocess
+
+def run_command(command):
+    """Run a shell command and return the output."""
+    try:
+        result = subprocess.run(
+            command, 
+            shell=True, 
+            check=True, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE,
+            universal_newlines=True
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing command: {command}")
+        print(f"Error message: {e.stderr}")
+        return None
+
+def get_pr_title(pr_num):
+    # Get the GitHub repository from environment variable
+    repo = os.environ.get('GITHUB_REPOSITORY')
+
+    #Get PR Title given PR number using GitHub CLI.
+    command = f"gh pr view {pr_num} --json title --jq .title"
+    
+    output = run_command(command)
+    return output
 
 def scan_directory(base_path='.'):
     """Scan the current directory structure and return a dictionary with the structure."""
@@ -42,10 +70,14 @@ def scan_directory(base_path='.'):
                     index_path = os.path.join(lang_path, "index.html")
                     languages[lang] = os.path.exists(index_path)
                     
+                pr_num = pr_dir.strip("pr")
+                pr_title = get_pr_title(pr_num)
+
                 # Only add to structure if at least one language has an index.html
                 if languages['it'] or languages['en']:
                     structure['prs'][pr_dir] = {
-                        'languages': languages
+                        'languages': languages,
+                        'title': pr_title
                     }
         except Exception as e:
             print(f"Error scanning PRs: {e}")
@@ -192,8 +224,9 @@ def generate_html(structure):
         
         for pr in prs:
             languages = structure['prs'][pr]['languages']
+            title = structure['prs'][pr]['title']
             html += f'    <div class="item">\n'
-            html += f'      <div class="item-title">{pr}</div>\n'
+            html += f'      <div class="item-title">{pr} - {title}</div>\n'
             if languages['it']:
                 html += f'      <a class="language-link" href="prs/{pr}/it/index.html">Italiano</a>\n'
             if languages['en']:
