@@ -17,5 +17,5 @@ The following diagram depicts the High-Level Architecture.
 Requirements
 ------------
 
-This section ...
+This section defines the main requirements ...
 
