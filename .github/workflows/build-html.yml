@@ -94,9 +94,10 @@ jobs:
           sphinx-build -b html docs/it/ html/${{ steps.deployment.outputs.path }}/it
           sphinx-build -b html docs/en/ html/${{ steps.deployment.outputs.path }}/en
 
-      - name: Copy generate_index python script
+      - name: Copy python scripts for deploy
         run: |
           cp .github/scripts/generate_index.py html/generate_index.py
+          cp .github/scripts/cleanup_old_prs.py html/cleanup_old_prs.py
 
       - name: Deploy to GitHub Pages
         if: success()
@@ -118,47 +119,47 @@ jobs:
           with:
             ref: gh-pages  # Checkout the gh-pages branch
 
-        # Clean up old PR directories
-        - name: Clean up old PR directories
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          run: |
-            # Check if prs directory exists
-            if [ ! -d "prs" ]; then
-              echo "The prs directory does not exist. Nothing to clean."
-              exit 0
-            fi
+        # # Clean up old PR directories
+        # - name: Clean up old PR directories
+        #   env:
+        #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        #   run: |
+        #     # Check if prs directory exists
+        #     if [ ! -d "prs" ]; then
+        #       echo "The prs directory does not exist. Nothing to clean."
+        #       exit 0
+        #     fi
             
-            # Get list of active (open) PRs
-            echo "Getting list of active PRs..."
-            ACTIVE_PRS=$(gh pr list --state open --json number --repo $GITHUB_REPOSITORY | jq -r '.[].number')
-            echo "Active PR numbers: $ACTIVE_PRS"
+        #     # Get list of active (open) PRs
+        #     echo "Getting list of active PRs..."
+        #     ACTIVE_PRS=$(gh pr list --state open --json number --repo $GITHUB_REPOSITORY | jq -r '.[].number')
+        #     echo "Active PR numbers: $ACTIVE_PRS"
             
-            # Initialize counter for removed directories
-            REMOVED_COUNT=0
+        #     # Initialize counter for removed directories
+        #     REMOVED_COUNT=0
             
-            # Check each PR directory
-            for PR_DIR in prs/pr*; do
-              if [ -d "$PR_DIR" ]; then
-                # Extract PR number from directory name
-                PR_NUM=$(echo "$PR_DIR" | grep -o -E 'pr[0-9]+' | sed 's/pr//')
+        #     # Check each PR directory
+        #     for PR_DIR in prs/pr*; do
+        #       if [ -d "$PR_DIR" ]; then
+        #         # Extract PR number from directory name
+        #         PR_NUM=$(echo "$PR_DIR" | grep -o -E 'pr[0-9]+' | sed 's/pr//')
                 
-                # Check if PR number is in active PRs list
-                if ! echo "$ACTIVE_PRS" | grep -q "$PR_NUM"; then
-                  echo "PR #$PR_NUM is not active, removing directory $PR_DIR"
-                  rm -rf "$PR_DIR"    
+        #         # Check if PR number is in active PRs list
+        #         if ! echo "$ACTIVE_PRS" | grep -q "$PR_NUM"; then
+        #           echo "PR #$PR_NUM is not active, removing directory $PR_DIR"
+        #           rm -rf "$PR_DIR"    
                   
-                  if [ -d "$PR_DIR" ]; then
-                    echo "WARNING: Directory $PR_DIR still exists after removal attempt!"
-                  else
-                    echo "Successfully removed directory $PR_DIR"
-                    REMOVED_COUNT=$((REMOVED_COUNT+1))
-                  fi
-                fi
-              fi
-            done
+        #           if [ -d "$PR_DIR" ]; then
+        #             echo "WARNING: Directory $PR_DIR still exists after removal attempt!"
+        #           else
+        #             echo "Successfully removed directory $PR_DIR"
+        #             REMOVED_COUNT=$((REMOVED_COUNT+1))
+        #           fi
+        #         fi
+        #       fi
+        #     done
             
-            echo "Removed $REMOVED_COUNT PR directories that were no longer active."
+        #     echo "Removed $REMOVED_COUNT PR directories that were no longer active."
                 
         # Install Python
         - uses: actions/setup-python@v4
@@ -166,13 +167,14 @@ jobs:
             python-version: "3.10"
             
         # Run the Python script
-        - name: Generate index.html
+        - name: Run the Python script for cleanup and index generation
           run: |
-            # Run the Python script
+            # Run the Python scripts 
+            python cleanup_old_prs.py
             python generate_index.py
             
-        # Commit and push the new index.html back to gh-pages
-        - name: Commit and push index.html
+        # Commit and push back to gh-pages
+        - name: Commit and push 
           run: |
             git config --global user.name 'GitHub Actions'
             git config --global user.email 'actions@github.com'
