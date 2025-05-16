@@ -63,8 +63,7 @@ jobs:
 
       - name: Copy python scripts for deploy
         run: |
-          cp .github/scripts/generate_index.py html/generate_index.py
-          cp .github/scripts/cleanup_old_prs.py html/cleanup_old_prs.py
+          cp -r .github/scripts/* html/
 
       - name: Deploy to GitHub Pages
         if: success()
