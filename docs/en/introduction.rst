@@ -7,6 +7,8 @@ This introductory section sets the stage for a more detailed exploration of the 
 
 This is a new external PR.
 
+This is a new internal PR.
+
 The following diagram depicts the High-Level Architecture.
 
 .. plantuml:: plantuml/solution-architecture.puml
