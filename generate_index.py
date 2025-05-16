@@ -7,18 +7,33 @@ This script:
 3. Generates an HTML index with links to all available documentation
 """
 import os
+import shutil
 from datetime import datetime
+import logging
+from pathlib import Path
+from typing import Dict, Any, Optional
+from jinja2 import Environment, FileSystemLoader
 from common_utils import get_github_repo, get_pr_info
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-def scan_directory(base_path='.'):
+# Get GitHub directory path
+GITHUB_DIR = Path(__file__).resolve().parent.parent
+
+
+def scan_directory(base_path: str = '.') -> Dict[str, Any]:
     """Scan the current directory structure and return a dictionary with the structure.
     
     Args:
-        base_path (str, optional): Base path to scan. Defaults to '.'.
+        base_path: Base path to scan
         
     Returns:
-        dict: Dictionary with the directory structure
+        Dictionary with the directory structure
     """
     structure = {
         'versione-corrente': {
@@ -29,255 +44,148 @@ def scan_directory(base_path='.'):
         'releases': {}
     }
     
+    base_path = Path(base_path)
+    
     # Check versione-corrente
-    versione_corrente_path = os.path.join(base_path, "versione-corrente")
-    if os.path.exists(versione_corrente_path):
+    versione_corrente_path = base_path / "versione-corrente"
+    if versione_corrente_path.exists():
         structure['versione-corrente']['exists'] = True
         
         # Check languages
         for lang in ['it', 'en']:
-            lang_path = os.path.join(versione_corrente_path, lang)
-            index_path = os.path.join(lang_path, "index.html")
-            structure['versione-corrente']['languages'][lang] = os.path.exists(index_path)
+            lang_path = versione_corrente_path / lang
+            index_path = lang_path / "index.html"
+            structure['versione-corrente']['languages'][lang] = index_path.exists()
     
     # Check PRs
-    prs_path = os.path.join(base_path, "prs")
-    if os.path.exists(prs_path):
-        # Get all directories in prs_path
+    prs_path = base_path / "prs"
+    if prs_path.exists():
         try:
-            pr_dirs = [d for d in os.listdir(prs_path) if os.path.isdir(os.path.join(prs_path, d))]
+            pr_dirs = [d for d in prs_path.iterdir() if d.is_dir()]
             
             for pr_dir in pr_dirs:
-                pr_full_path = os.path.join(prs_path, pr_dir)
+                pr_dir_name = pr_dir.name
+                if not pr_dir_name.startswith('pr'):
+                    continue
+                    
                 languages = {}
                 
                 # Check languages
                 for lang in ['it', 'en']:
-                    lang_path = os.path.join(pr_full_path, lang)
-                    index_path = os.path.join(lang_path, "index.html")
-                    languages[lang] = os.path.exists(index_path)
+                    lang_path = pr_dir / lang
+                    index_path = lang_path / "index.html"
+                    languages[lang] = index_path.exists()
                 
                 # Extract PR number and get title
-                pr_num = pr_dir.strip("pr")
+                pr_num = pr_dir_name.replace("pr", "")
                 pr_info = get_pr_info(pr_num)
                 pr_title = pr_info.get('title', f"PR #{pr_num}") if pr_info else f"PR #{pr_num}"
 
                 # Only add to structure if at least one language has an index.html
                 if languages['it'] or languages['en']:
-                    structure['prs'][pr_dir] = {
+                    structure['prs'][pr_dir_name] = {
                         'languages': languages,
                         'title': pr_title,
                         'number': pr_num  # Store PR number for creating the link
                     }
         except Exception as e:
-            print(f"Error scanning PRs: {e}")
+            logger.error(f"Error scanning PRs: {e}")
     
     # Check Releases
-    releases_path = os.path.join(base_path, "releases")
-    if os.path.exists(releases_path):
-        # Get all directories in releases_path
+    releases_path = base_path / "releases"
+    if releases_path.exists():
         try:
-            release_dirs = [d for d in os.listdir(releases_path) if os.path.isdir(os.path.join(releases_path, d))]
+            release_dirs = [d for d in releases_path.iterdir() if d.is_dir()]
             
             for release_dir in release_dirs:
-                release_full_path = os.path.join(releases_path, release_dir)
+                release_dir_name = release_dir.name
                 languages = {}
                 
                 # Check languages
                 for lang in ['it', 'en']:
-                    lang_path = os.path.join(release_full_path, lang)
-                    index_path = os.path.join(lang_path, "index.html")
-                    languages[lang] = os.path.exists(index_path)
+                    lang_path = release_dir / lang
+                    index_path = lang_path / "index.html"
+                    languages[lang] = index_path.exists()
                     
                 # Only add to structure if at least one language has an index.html
                 if languages['it'] or languages['en']:
-                    structure['releases'][release_dir] = {
+                    structure['releases'][release_dir_name] = {
                         'languages': languages
                     }
         except Exception as e:
-            print(f"Error scanning releases: {e}")
+            logger.error(f"Error scanning releases: {e}")
     
     return structure
 
 
-def generate_html(structure):
-    """Generate HTML content based on the directory structure.
+def generate_html(structure: Dict[str, Any]) -> str:
+    """Generate HTML content based on the directory structure using external Jinja2 template.
     
     Args:
-        structure (dict): Dictionary with the directory structure
+        structure: Dictionary with the directory structure
         
     Returns:
-        str: HTML content
+        HTML content
     """
-    html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Project Documentation</title>
-<style>
-    body {{
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    line-height: 1.6;
-    color: #333;
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 20px;
-    }}
-    h1 {{
-    border-bottom: 1px solid #eaecef;
-    padding-bottom: 10px;
-    }}
-    h2 {{
-    margin-top: 24px;
-    margin-bottom: 16px;
-    font-size: 1.5em;
-    }}
-    .section {{
-    margin-bottom: 30px;
-    }}
-    .language-link {{
-    display: inline-block;
-    margin-right: 15px;
-    padding: 5px 10px;
-    background: #f1f8ff;
-    border-radius: 3px;
-    text-decoration: none;
-    color: #0366d6;
-    }}
-    .language-link:hover {{
-    background: #ddeeff;
-    }}
-    .item {{
-    margin: 10px 0;
-    padding: 10px;
-    background: #f6f8fa;
-    border-radius: 3px;
-    }}
-    .item-title {{
-    font-weight: bold;
-    margin-bottom: 10px;
-    }}
-    .no-item {{
-    color: #666;
-    font-style: italic;
-    }}
-    .pr-link {{
-    text-decoration: none;
-    color: #0366d6;
-    }}
-    .pr-link:hover {{
-    text-decoration: underline;
-    }}
-</style>
-</head>
-<body>
-<h1>Project Documentation</h1>
-
-<div class="section">
-    <h2>Current Version</h2>
-"""
-
-    # Current Version section
-    if structure['versione-corrente']['exists']:
-        languages = structure['versione-corrente']['languages']
-        if languages['it'] or languages['en']:
-            html += '    <div class="item">\n'
-            if languages['it']:
-                html += '      <a class="language-link" href="versione-corrente/it/index.html">Italiano</a>\n'
-            if languages['en']:
-                html += '      <a class="language-link" href="versione-corrente/en/index.html">English</a>\n'
-            html += '    </div>\n'
-        else:
-            html += '    <p class="no-item">No current version available</p>\n'
-    else:
-        html += '    <p class="no-item">No current version available</p>\n'
-
-    # Releases section
-    html += '''
-</div>
-
-<div class="section">
-    <h2>Releases</h2>
-'''
-    if structure['releases']:
-        
-        releases = structure['releases'].keys()
-        
-        for release in releases:
-            languages = structure['releases'][release]['languages']
-            html += f'    <div class="item">\n'
-            html += f'      <div class="item-title">{release}</div>\n'
-            if languages['it']:
-                html += f'      <a class="language-link" href="releases/{release}/it/index.html">Italiano</a>\n'
-            if languages['en']:
-                html += f'      <a class="language-link" href="releases/{release}/en/index.html">English</a>\n'
-            html += '    </div>\n'
-    else:
-        html += '    <p class="no-item">No releases available</p>\n'
-
-    # PRs section
-    html += '''
-</div>
-
-<div class="section">
-    <h2>Pull Requests</h2>
-'''
-    if structure['prs']:
-        
-        prs = structure['prs'].keys()
-        
-        # Get the repository from environment variable for creating PR links
-        repo = get_github_repo()
-        
-        for pr in prs:
-            languages = structure['prs'][pr]['languages']
-            title = structure['prs'][pr]['title']
-            pr_num = structure['prs'][pr]['number']
-            
-            # Create the PR link
-            pr_link = f"https://github.com/{repo}/pull/{pr_num}"
-            
-            html += f'    <div class="item">\n'
-            html += f'      <div class="item-title">{pr} - <a class="pr-link" href="{pr_link}" target="_blank">{title}</a></div>\n'
-            if languages['it']:
-                html += f'      <a class="language-link" href="prs/{pr}/it/index.html">Italiano</a>\n'
-            if languages['en']:
-                html += f'      <a class="language-link" href="prs/{pr}/en/index.html">English</a>\n'
-            html += '    </div>\n'
-    else:
-        html += '    <p class="no-item">No pull requests available</p>\n'
-
-    # Footer
+    # Set up Jinja2 environment with templates directory
+    template_dir = GITHUB_DIR / "templates"
+    env = Environment(loader=FileSystemLoader(template_dir))
+    template = env.get_template("index.html")
+    
+    # Prepare template data
     current_date = datetime.now().strftime("%Y-%m-%d")
-    html += f'''
-</div>
-
-<footer style="margin-top: 50px; color: #666; font-size: 0.9em; text-align: center; border-top: 1px solid #eaecef; padding-top: 20px;">
-    Generated on {current_date} by automatic directory scan
-</footer>
-</body>
-</html>
-'''
-    return html
+    repo = get_github_repo() or ""
+    
+    # Render template
+    return template.render(structure=structure, current_date=current_date, repo=repo)
 
 
-def main():
+def copy_static_files(output_dir: str = '.') -> None:
+    """Copy static files to the output directory.
+    
+    Args:
+        output_dir: Directory where index.html will be generated
+    """
+    output_path = Path(output_dir)
+    static_dir = GITHUB_DIR / "static"
+    
+    # Create static directory in output if doesn't exist
+    output_static_dir = output_path / "static"
+    output_static_dir.mkdir(exist_ok=True)
+    
+    # Copy CSS file
+    css_source = static_dir / "styles.css"
+    css_dest = output_static_dir / "styles.css"
+    
+    try:
+        shutil.copy2(css_source, css_dest)
+        logger.info(f"Copied CSS to {css_dest}")
+    except Exception as e:
+        logger.error(f"Error copying static files: {e}")
+
+
+def main() -> None:
     """Main function to scan directories and generate index.html."""
     # Scan the current directory (we're in the root of gh-pages)
     structure = scan_directory()
-    print("Directory structure found:")
-    print(f"versione-corrente: {structure['versione-corrente']}")
-    print(f"PRs: {len(structure['prs'])} found")
-    print(f"Releases: {len(structure['releases'])} found")
+    logger.info("Directory structure found:")
+    logger.info(f"versione-corrente: {structure['versione-corrente']}")
+    logger.info(f"PRs: {len(structure['prs'])} found")
+    logger.info(f"Releases: {len(structure['releases'])} found")
     
+    # Generate HTML content
     html_content = generate_html(structure)
     
-    # Write the HTML to index.html
-    with open("index.html", "w") as f:
-        f.write(html_content)
+    # Copy static files
+    copy_static_files()
     
-    print("Generated index.html successfully!")
+    # Write the HTML to index.html
+    try:
+        with open("index.html", "w", encoding="utf-8") as f:
+            f.write(html_content)
+        logger.info("Generated index.html successfully!")
+    except Exception as e:
+        logger.error(f"Error writing index.html: {e}")
 
 
 if __name__ == "__main__":
