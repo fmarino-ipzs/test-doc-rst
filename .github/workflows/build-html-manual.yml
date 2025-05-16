@@ -63,9 +63,9 @@ jobs:
 
       - name: Copy python scripts for deploy
         run: |
-          cp -r .github/scripts/* html/scripts/
-          cp -r .github/templates/* html/templates/
-          cp -r .github/static/* html/static/
+          mkdir -p html/scripts/ && cp -r .github/scripts/* html/scripts/
+          mkdir -p html/templates/ && cp -r .github/templates/* html/templates/
+          mkdir -p html/static/ && cp -r .github/static/* html/static/
 
       - name: Deploy to GitHub Pages
         if: success()

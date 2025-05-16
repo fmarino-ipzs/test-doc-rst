@@ -6,12 +6,11 @@ This script:
 2. Builds a structure of available documentation versions
 3. Generates an HTML index with links to all available documentation
 """
-import os
 import shutil
 from datetime import datetime
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from jinja2 import Environment, FileSystemLoader
 from common_utils import get_github_repo, get_pr_info
 
@@ -27,7 +26,7 @@ GITHUB_DIR = Path(__file__).resolve().parent.parent
 
 
 def scan_directory(base_path: str = '.') -> Dict[str, Any]:
-    """Scan the current directory structure and return a dictionary with the structure.
+    """Scan the directory structure and return a dictionary with the structure.
     
     Args:
         base_path: Base path to scan
@@ -45,6 +44,7 @@ def scan_directory(base_path: str = '.') -> Dict[str, Any]:
     }
     
     base_path = Path(base_path)
+    logger.info(f"Scanning directory structure at: {base_path}")
     
     # Check versione-corrente
     versione_corrente_path = base_path / "versione-corrente"
@@ -165,9 +165,12 @@ def copy_static_files(output_dir: str = '.') -> None:
 
 
 def main() -> None:
-    """Main function to scan directories and generate index.html."""
+    """Main function to scan directories and generate index.html in the GitHub directory level."""
+    # Get output directory (GITHUB_DIR)
+    output_dir = GITHUB_DIR
+    
     # Scan the current directory (we're in the root of gh-pages)
-    structure = scan_directory()
+    structure = scan_directory(output_dir)
     logger.info("Directory structure found:")
     logger.info(f"versione-corrente: {structure['versione-corrente']}")
     logger.info(f"PRs: {len(structure['prs'])} found")
@@ -176,14 +179,15 @@ def main() -> None:
     # Generate HTML content
     html_content = generate_html(structure)
     
-    # Copy static files
-    copy_static_files()
+    # Copy static files to output directory
+    copy_static_files(output_dir)
     
-    # Write the HTML to index.html
+    # Write the HTML to index.html in the output directory
+    index_path = output_dir / "index.html"
     try:
-        with open("index.html", "w", encoding="utf-8") as f:
+        with open(index_path, "w", encoding="utf-8") as f:
             f.write(html_content)
-        logger.info("Generated index.html successfully!")
+        logger.info(f"Generated index.html successfully at {index_path}")
     except Exception as e:
         logger.error(f"Error writing index.html: {e}")
 
