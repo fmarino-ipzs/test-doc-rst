@@ -1,24 +1,33 @@
 name: PR Bot for Fork Previews
 
 on:
-  pull_request:
+  pull_request_target:  # Usa pull_request_target invece di pull_request
     types: [opened, reopened, synchronize]
     paths:
-      - 'docs/**'  # Only trigger for changes in docs
+      - 'docs/**'  # Solo quando vengono modificati file in docs
+
+# Definiamo esplicitamente i permessi necessari
+permissions:
+  contents: read
+  pull-requests: write  # Permesso esplicito per scrivere nelle PR
 
 jobs:
-  check-fork:
+  post-helper-comments:
     runs-on: ubuntu-latest
-    # Only run for PRs from forks
+    # Esegui solo per PR da fork esterni
     if: github.event.pull_request.head.repo.full_name != github.repository
     
     steps:
-      - name: Post helper comment
+      - name: Post main helper comment
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const prNumber = context.issue.number;
+            // Uso esplicito del payload della PR
+            const prNumber = context.payload.pull_request.number;
+            const { owner, repo } = context.repo;
+            
+            console.log(`Creating main helper comment for PR #${prNumber} in ${owner}/${repo}`);
             
             // Create message with options for maintainers
             const message = `## 🔍 Documentation Preview
@@ -31,63 +40,83 @@ jobs:
             
             1. **[Recommended]** Comment \`/preview\` on this PR
             
-            2. **[Alternative]** Use the [manual workflow](${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/workflows/manual-pr-preview.yml):
+            2. **[Alternative]** Use the [manual workflow](${process.env.GITHUB_SERVER_URL}/${owner}/${repo}/actions/workflows/build-html-manual.yml):
                - PR Number: \`${prNumber}\`
-               - Branch name: \`refs/pull/${prNumber}/head\`
             
             Once generated, the preview link will be added as a comment to this PR.`;
             
-            // Post the comment
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-              body: message
-            });
-
-  # Optional: Add an automatic check for permissions
-  check-permissions:
-    runs-on: ubuntu-latest
-    # Only run for PRs from forks
-    if: github.event.pull_request.head.repo.full_name != github.repository
-    needs: check-fork
-    
-    steps:
-      - name: Check PR submitter permissions
+            try {
+              // Post the comment with error handling
+              const response = await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body: message
+              });
+              console.log("Main helper comment created successfully");
+            } catch (error) {
+              console.error("Error creating main helper comment:", error.message);
+              core.setFailed(`Failed to create comment: ${error.message}`);
+            }
+      
+      - name: Check PR author permissions
+        id: check-permissions
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const prNumber = context.issue.number;
+            // Uso esplicito del payload della PR
+            const prNumber = context.payload.pull_request.number;
             const { owner, repo } = context.repo;
             
-            // Get PR author's permission level
-            const pr = await github.rest.pulls.get({
-              owner,
-              repo,
-              pull_number: prNumber
-            });
-            
-            const author = pr.data.user.login;
+            console.log(`Checking permissions for PR #${prNumber} author`);
             
             try {
-              // Check permission level
-              const permission = await github.rest.repos.getCollaboratorPermissionLevel({
+              // Get PR author's permission level
+              const pr = await github.rest.pulls.get({
                 owner,
                 repo,
-                username: author
+                pull_number: prNumber
               });
               
-              // If author has push permission, suggest auto-preview
-              if (['admin', 'write'].includes(permission.data.permission)) {
-                await github.rest.issues.createComment({
+              const author = pr.data.user.login;
+              console.log(`PR author is: ${author}`);
+              
+              try {
+                // Check permission level
+                const permission = await github.rest.repos.getCollaboratorPermissionLevel({
                   owner,
                   repo,
-                  issue_number: prNumber,
-                  body: `👋 @${author} - You have push access to this repository. You can trigger a preview with \`/preview\`.`
+                  username: author
                 });
+                
+                const permissionLevel = permission.data.permission;
+                console.log(`Author ${author} has permission level: ${permissionLevel}`);
+                
+                // If author has push permission, suggest auto-preview
+                if (['admin', 'write'].includes(permissionLevel)) {
+                  console.log(`Author ${author} has sufficient permissions, adding helper comment`);
+                  
+                  await github.rest.issues.createComment({
+                    owner,
+                    repo,
+                    issue_number: prNumber,
+                    body: `👋 @${author} - You have push access to this repository. You can trigger a preview manually.`
+                  });
+                  
+                  console.log("Permission helper comment created successfully");
+                  return { has_permission: true, permission: permissionLevel };
+                } else {
+                  console.log(`Author ${author} does not have sufficient permissions`);
+                  return { has_permission: false, permission: permissionLevel };
+                }
+              } catch (permError) {
+                // User is likely not a collaborator
+                console.log(`Author ${author} is not a collaborator`, permError.message);
+                return { has_permission: false, permission: 'none' };
               }
             } catch (error) {
-              // User is not a collaborator, no additional message needed
-              console.log("User is not a collaborator:", error);
+              console.error("Error checking permissions:", error.message);
+              core.setFailed(`Failed to check permissions: ${error.message}`);
+              return { has_permission: false, error: error.message };
             }
