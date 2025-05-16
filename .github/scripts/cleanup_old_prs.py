@@ -6,21 +6,29 @@ This script:
 2. Scans the 'prs' directory for PR directories
 3. Removes directories for PRs that are no longer active (closed/merged)
 """
-import os
 import re
 import shutil
+import logging
 from pathlib import Path
+from typing import Optional, List, Set
 from common_utils import get_active_pr_numbers, get_github_repo
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-def extract_pr_number(pr_dir):
+
+def extract_pr_number(pr_dir: str) -> Optional[int]:
     """Extract PR number from directory name (e.g., 'pr12' -> 12).
     
     Args:
-        pr_dir (str): PR directory name
+        pr_dir: PR directory name
         
     Returns:
-        int or None: PR number if found, None otherwise
+        PR number if found, None otherwise
     """
     match = re.search(r'pr(\d+)', pr_dir)
     if match:
@@ -28,35 +36,42 @@ def extract_pr_number(pr_dir):
     return None
 
 
-def clean_old_pr_directories():
-    """Main function to clean up old PR directories."""
-    prs_dir = "prs"
+def clean_old_pr_directories(prs_dir: str = "prs") -> int:
+    """Clean up old PR directories.
     
-    # Check if prs directory exists
-    if not os.path.isdir(prs_dir):
-        print(f"The '{prs_dir}' directory does not exist. Nothing to clean.")
-        return
+    Args:
+        prs_dir: Directory containing PR folders
+        
+    Returns:
+        Number of PR directories removed
+    """
+    # Check if prs directory exists using Path
+    prs_path = Path(prs_dir)
+    if not prs_path.is_dir():
+        logger.info(f"The '{prs_dir}' directory does not exist. Nothing to clean.")
+        return 0
     
     # Get the GitHub repository
     repo = get_github_repo()
     
     # Get list of active PR numbers
-    print("Getting list of active PRs...")
+    logger.info("Getting list of active PRs...")
     active_pr_numbers = get_active_pr_numbers(repo)
-    print(f"Active PR numbers: {active_pr_numbers}")
+    logger.info(f"Active PR numbers: {active_pr_numbers}")
     
     # Initialize counter for removed directories
     removed_count = 0
     
-    # Check each PR directory
+    # Check each PR directory using pathlib
     try:
-        pr_dirs = [d for d in os.listdir(prs_dir) if os.path.isdir(os.path.join(prs_dir, d))]
+        # Get all directories in prs_path
+        pr_dirs = [d for d in prs_path.iterdir() if d.is_dir()]
     except Exception as e:
-        print(f"Error accessing {prs_dir} directory: {e}")
-        return
+        logger.error(f"Error accessing {prs_dir} directory: {e}")
+        return 0
     
-    for pr_dir_name in pr_dirs:
-        pr_full_path = os.path.join(prs_dir, pr_dir_name)
+    for pr_dir in pr_dirs:
+        pr_dir_name = pr_dir.name
         
         # Skip if not a PR directory pattern
         if not pr_dir_name.startswith('pr'):
@@ -65,37 +80,56 @@ def clean_old_pr_directories():
         # Extract PR number
         pr_num = extract_pr_number(pr_dir_name)
         if pr_num is None:
-            print(f"Could not extract PR number from directory: {pr_dir_name}")
+            logger.warning(f"Could not extract PR number from directory: {pr_dir_name}")
             continue
         
         # Check if PR is active
         if pr_num not in active_pr_numbers:
-            print(f"PR #{pr_num} is not active, removing directory {pr_full_path}")
+            logger.info(f"PR #{pr_num} is not active, removing directory {pr_dir}")
             
             try:
-                # First try to delete any files to handle potential permission issues
-                for root, dirs, files in os.walk(pr_full_path, topdown=False):
-                    for file in files:
-                        try:
-                            os.remove(os.path.join(root, file))
-                        except Exception as e:
-                            print(f"Warning: Could not remove file {file}: {e}")
-                
-                # Then remove the directory
-                shutil.rmtree(pr_full_path)
-                
-                # Verify removal
-                if not os.path.exists(pr_full_path):
-                    print(f"Successfully removed directory {pr_full_path}")
+                # Remove the directory and its contents
+                if _safe_remove_directory(pr_dir):
                     removed_count += 1
-                else:
-                    print(f"WARNING: Directory {pr_full_path} still exists after removal attempt!")
             except Exception as e:
-                print(f"Error removing {pr_full_path}: {e}")
+                logger.error(f"Error removing {pr_dir}: {e}")
     
-    print(f"Removed {removed_count} PR directories that were no longer active.")
+    logger.info(f"Removed {removed_count} PR directories that were no longer active.")
+    return removed_count
+
+
+def _safe_remove_directory(directory: Path) -> bool:
+    """Safely remove a directory by first removing its contents.
+    
+    Args:
+        directory: Path to the directory to remove
+        
+    Returns:
+        True if directory was successfully removed, False otherwise
+    """
+    try:
+        # Remove all files
+        for item in directory.rglob("*"):
+            if item.is_file():
+                try:
+                    item.unlink()
+                except Exception as e:
+                    logger.warning(f"Could not remove file {item}: {e}")
+        
+        # Then remove directory
+        shutil.rmtree(directory)
+        
+        # Verify removal
+        if not directory.exists():
+            logger.info(f"Successfully removed directory {directory}")
+            return True
+        else:
+            logger.warning(f"Directory {directory} still exists after removal attempt!")
+            return False
+    except Exception as e:
+        logger.error(f"Error during directory removal: {e}")
+        return False
 
 
 if __name__ == "__main__":
     clean_old_pr_directories()
-    
