@@ -22,7 +22,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Get GitHub directory path
-GITHUB_DIR = Path(__file__).resolve().parent.parent
+GITHUB_DIR = Path(__file__).resolve().parent #.parent
 
 
 def scan_directory(base_path: str = '.') -> Dict[str, Any]:
