@@ -3,6 +3,7 @@ Technical Documentation
 
 This document provides the technical architecture, implementation framework, and design requirements to be adopted by the System Technical Solutions.
 
+This is an example.
 
 .. Index of content
 .. ----------------
