@@ -30,11 +30,11 @@ jobs:
             console.log(`Creating main helper comment for PR #${prNumber} in ${owner}/${repo}`);
             
             // Create message with options for maintainers
-            const message = `## 🔍 Documentation Preview
+            const message = `## 📢 Documentation Preview 🔍
             
             This PR comes from a forked repository, so the documentation preview was not automatically generated.
             
-            ### For repository maintainers only:
+            ### ⚠️ For repository maintainers only:
             
             You can generate a preview using the [manual workflow](${process.env.GITHUB_SERVER_URL}/${owner}/${repo}/actions/workflows/build-html-manual.yml), with PR Number: \`${prNumber}\` as an input.
             
@@ -54,64 +54,3 @@ jobs:
               core.setFailed(`Failed to create comment: ${error.message}`);
             }
       
-      # - name: Check PR author permissions
-      #   id: check-permissions
-      #   uses: actions/github-script@v6
-      #   with:
-      #     github-token: ${{ secrets.GITHUB_TOKEN }}
-      #     script: |
-      #       // Uso esplicito del payload della PR
-      #       const prNumber = context.payload.pull_request.number;
-      #       const { owner, repo } = context.repo;
-            
-      #       console.log(`Checking permissions for PR #${prNumber} author`);
-            
-      #       try {
-      #         // Get PR author's permission level
-      #         const pr = await github.rest.pulls.get({
-      #           owner,
-      #           repo,
-      #           pull_number: prNumber
-      #         });
-              
-      #         const author = pr.data.user.login;
-      #         console.log(`PR author is: ${author}`);
-              
-      #         try {
-      #           // Check permission level
-      #           const permission = await github.rest.repos.getCollaboratorPermissionLevel({
-      #             owner,
-      #             repo,
-      #             username: author
-      #           });
-                
-      #           const permissionLevel = permission.data.permission;
-      #           console.log(`Author ${author} has permission level: ${permissionLevel}`);
-                
-      #           // If author has push permission, suggest auto-preview
-      #           if (['admin', 'write'].includes(permissionLevel)) {
-      #             console.log(`Author ${author} has sufficient permissions, adding helper comment`);
-                  
-      #             await github.rest.issues.createComment({
-      #               owner,
-      #               repo,
-      #               issue_number: prNumber,
-      #               body: `👋 @${author} - You have push access to this repository. You can trigger a preview manually.`
-      #             });
-                  
-      #             console.log("Permission helper comment created successfully");
-      #             return { has_permission: true, permission: permissionLevel };
-      #           } else {
-      #             console.log(`Author ${author} does not have sufficient permissions`);
-      #             return { has_permission: false, permission: permissionLevel };
-      #           }
-      #         } catch (permError) {
-      #           // User is likely not a collaborator
-      #           console.log(`Author ${author} is not a collaborator`, permError.message);
-      #           return { has_permission: false, permission: 'none' };
-      #         }
-      #       } catch (error) {
-      #         console.error("Error checking permissions:", error.message);
-      #         core.setFailed(`Failed to check permissions: ${error.message}`);
-      #         return { has_permission: false, error: error.message };
-      #       }
