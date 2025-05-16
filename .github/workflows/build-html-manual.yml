@@ -82,7 +82,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const prNumber = ${{ github.event.inputs.pr_number }};
-            const comment = `✅ Preview for this PR has been manually generated and is available here: https://[your-github-pages-url]/prs/pr${prNumber}/`;
+            const comment = `✅ Preview for this PR has been manually generated and is available here: https://fmarino-ipzs.github.io/prs/pr${prNumber}/`;
             
             github.rest.issues.createComment({
               owner: context.repo.owner,
