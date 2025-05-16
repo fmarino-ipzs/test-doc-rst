@@ -1,0 +1,93 @@
+name: PR Bot for Fork Previews
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - 'docs/**'  # Only trigger for changes in docs
+
+jobs:
+  check-fork:
+    runs-on: ubuntu-latest
+    # Only run for PRs from forks
+    if: github.event.pull_request.head.repo.full_name != github.repository
+    
+    steps:
+      - name: Post helper comment
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const prNumber = context.issue.number;
+            
+            // Create message with options for maintainers
+            const message = `## 🔍 Documentation Preview
+            
+            This PR comes from a forked repository, so the documentation preview was not automatically generated.
+            
+            ### For repository maintainers only:
+            
+            You can generate a preview by:
+            
+            1. **[Recommended]** Comment \`/preview\` on this PR
+            
+            2. **[Alternative]** Use the [manual workflow](${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/workflows/manual-pr-preview.yml):
+               - PR Number: \`${prNumber}\`
+               - Branch name: \`refs/pull/${prNumber}/head\`
+            
+            Once generated, the preview link will be added as a comment to this PR.`;
+            
+            // Post the comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: message
+            });
+
+  # Optional: Add an automatic check for permissions
+  check-permissions:
+    runs-on: ubuntu-latest
+    # Only run for PRs from forks
+    if: github.event.pull_request.head.repo.full_name != github.repository
+    needs: check-fork
+    
+    steps:
+      - name: Check PR submitter permissions
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const prNumber = context.issue.number;
+            const { owner, repo } = context.repo;
+            
+            // Get PR author's permission level
+            const pr = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: prNumber
+            });
+            
+            const author = pr.data.user.login;
+            
+            try {
+              // Check permission level
+              const permission = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner,
+                repo,
+                username: author
+              });
+              
+              // If author has push permission, suggest auto-preview
+              if (['admin', 'write'].includes(permission.data.permission)) {
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: prNumber,
+                  body: `👋 @${author} - You have push access to this repository. You can trigger a preview with \`/preview\`.`
+                });
+              }
+            } catch (error) {
+              // User is not a collaborator, no additional message needed
+              console.log("User is not a collaborator:", error);
+            }
