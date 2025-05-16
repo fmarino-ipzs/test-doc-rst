@@ -77,7 +77,8 @@ def scan_directory(base_path='.'):
                 if languages['it'] or languages['en']:
                     structure['prs'][pr_dir] = {
                         'languages': languages,
-                        'title': pr_title
+                        'title': pr_title,
+                        'number': pr_num  # Store PR number for creating the link
                     }
         except Exception as e:
             print(f"Error scanning PRs: {e}")
@@ -164,6 +165,13 @@ def generate_html(structure):
     color: #666;
     font-style: italic;
     }}
+    .pr-link {{
+    text-decoration: none;
+    color: #0366d6;
+    }}
+    .pr-link:hover {{
+    text-decoration: underline;
+    }}
 </style>
 </head>
 <body>
@@ -222,11 +230,19 @@ def generate_html(structure):
         
         prs = structure['prs'].keys()
         
+        # Get the repository from environment variable for creating PR links
+        repo = os.environ.get('GITHUB_REPOSITORY', '')
+        
         for pr in prs:
             languages = structure['prs'][pr]['languages']
             title = structure['prs'][pr]['title']
+            pr_num = structure['prs'][pr]['number']
+            
+            # Create the PR link
+            pr_link = f"https://github.com/{repo}/pull/{pr_num}"
+            
             html += f'    <div class="item">\n'
-            html += f'      <div class="item-title">{pr} - {title}</div>\n'
+            html += f'      <div class="item-title">{pr} - <a class="pr-link" href="{pr_link}" target="_blank">{title}</a></div>\n'
             if languages['it']:
                 html += f'      <a class="language-link" href="prs/{pr}/it/index.html">Italiano</a>\n'
             if languages['en']:
