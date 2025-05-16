@@ -1,38 +1,25 @@
+"""
+Script to generate the main index.html by scanning the directory structure.
+
+This script:
+1. Scans the current directory for documentation folders
+2. Builds a structure of available documentation versions
+3. Generates an HTML index with links to all available documentation
+"""
 import os
-import re
-from pathlib import Path
 from datetime import datetime
-import subprocess
+from common_utils import get_github_repo, get_pr_info
 
-def run_command(command):
-    """Run a shell command and return the output."""
-    try:
-        result = subprocess.run(
-            command, 
-            shell=True, 
-            check=True, 
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.PIPE,
-            universal_newlines=True
-        )
-        return result.stdout.strip()
-    except subprocess.CalledProcessError as e:
-        print(f"Error executing command: {command}")
-        print(f"Error message: {e.stderr}")
-        return None
-
-def get_pr_title(pr_num):
-    # Get the GitHub repository from environment variable
-    repo = os.environ.get('GITHUB_REPOSITORY')
-
-    #Get PR Title given PR number using GitHub CLI.
-    command = f"gh pr view {pr_num} --json title --jq .title"
-    
-    output = run_command(command)
-    return output
 
 def scan_directory(base_path='.'):
-    """Scan the current directory structure and return a dictionary with the structure."""
+    """Scan the current directory structure and return a dictionary with the structure.
+    
+    Args:
+        base_path (str, optional): Base path to scan. Defaults to '.'.
+        
+    Returns:
+        dict: Dictionary with the directory structure
+    """
     structure = {
         'versione-corrente': {
             'exists': False,
@@ -69,9 +56,11 @@ def scan_directory(base_path='.'):
                     lang_path = os.path.join(pr_full_path, lang)
                     index_path = os.path.join(lang_path, "index.html")
                     languages[lang] = os.path.exists(index_path)
-                    
+                
+                # Extract PR number and get title
                 pr_num = pr_dir.strip("pr")
-                pr_title = get_pr_title(pr_num)
+                pr_info = get_pr_info(pr_num)
+                pr_title = pr_info.get('title', f"PR #{pr_num}") if pr_info else f"PR #{pr_num}"
 
                 # Only add to structure if at least one language has an index.html
                 if languages['it'] or languages['en']:
@@ -110,8 +99,16 @@ def scan_directory(base_path='.'):
     
     return structure
 
+
 def generate_html(structure):
-    """Generate HTML content based on the structure."""
+    """Generate HTML content based on the directory structure.
+    
+    Args:
+        structure (dict): Dictionary with the directory structure
+        
+    Returns:
+        str: HTML content
+    """
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -231,7 +228,7 @@ def generate_html(structure):
         prs = structure['prs'].keys()
         
         # Get the repository from environment variable for creating PR links
-        repo = os.environ.get('GITHUB_REPOSITORY', '')
+        repo = get_github_repo()
         
         for pr in prs:
             languages = structure['prs'][pr]['languages']
@@ -264,7 +261,9 @@ def generate_html(structure):
 '''
     return html
 
+
 def main():
+    """Main function to scan directories and generate index.html."""
     # Scan the current directory (we're in the root of gh-pages)
     structure = scan_directory()
     print("Directory structure found:")
@@ -279,6 +278,7 @@ def main():
         f.write(html_content)
     
     print("Generated index.html successfully!")
+
 
 if __name__ == "__main__":
     main()

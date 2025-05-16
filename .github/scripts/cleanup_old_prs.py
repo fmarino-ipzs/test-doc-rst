@@ -1,57 +1,27 @@
-# Script to clean up old PR directories in the gh-pages branch.
-# This script:
-# 1. Gets a list of active (open) PRs using GitHub CLI
-# 2. Scans the 'prs' directory for PR directories
-# 3. Removes directories for PRs that are no longer active (closed/merged)
+"""
+Script to clean up old PR directories in the gh-pages branch.
 
-
+This script:
+1. Gets a list of active (open) PRs using GitHub CLI
+2. Scans the 'prs' directory for PR directories
+3. Removes directories for PRs that are no longer active (closed/merged)
+"""
 import os
 import re
-#import sys
-import json
 import shutil
-import subprocess
 from pathlib import Path
-
-
-def run_command(command):
-    """Run a shell command and return the output."""
-    try:
-        result = subprocess.run(
-            command, 
-            shell=True, 
-            check=True, 
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.PIPE,
-            universal_newlines=True
-        )
-        return result.stdout.strip()
-    except subprocess.CalledProcessError as e:
-        print(f"Error executing command: {command}")
-        print(f"Error message: {e.stderr}")
-        return None
-
-
-def get_active_pr_numbers(repo=None):
-    """Get list of active (open) PR numbers using GitHub CLI."""
-    repo_option = f"--repo {repo}" if repo else ""
-    command = f"gh pr list --state open --json number {repo_option}"
-    
-    output = run_command(command)
-    if not output:
-        print("Failed to get list of PRs. Make sure GitHub CLI is installed and authenticated.")
-        return []
-    
-    try:
-        prs_data = json.loads(output)
-        return [pr['number'] for pr in prs_data]
-    except json.JSONDecodeError:
-        print(f"Failed to parse JSON output: {output}")
-        return []
+from common_utils import get_active_pr_numbers, get_github_repo
 
 
 def extract_pr_number(pr_dir):
-    """Extract PR number from directory name (e.g., 'pr12' -> 12)."""
+    """Extract PR number from directory name (e.g., 'pr12' -> 12).
+    
+    Args:
+        pr_dir (str): PR directory name
+        
+    Returns:
+        int or None: PR number if found, None otherwise
+    """
     match = re.search(r'pr(\d+)', pr_dir)
     if match:
         return int(match.group(1))
@@ -67,8 +37,8 @@ def clean_old_pr_directories():
         print(f"The '{prs_dir}' directory does not exist. Nothing to clean.")
         return
     
-    # Get the GitHub repository from environment variable
-    repo = os.environ.get('GITHUB_REPOSITORY')
+    # Get the GitHub repository
+    repo = get_github_repo()
     
     # Get list of active PR numbers
     print("Getting list of active PRs...")
@@ -128,3 +98,4 @@ def clean_old_pr_directories():
 
 if __name__ == "__main__":
     clean_old_pr_directories()
+    
