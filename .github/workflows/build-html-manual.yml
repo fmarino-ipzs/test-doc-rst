@@ -86,7 +86,9 @@ jobs:
             const repoUrl = `https://${context.repo.owner}.github.io/${context.repo.repo}`;
             const previewUrl = `${repoUrl}/prs/pr${prNumber}/`;
             
-            const comment = `✅ Preview for this PR has been manually generated and is available here: ${previewUrl}`;
+            const comment = `✅ Preview for this PR has been manually generated and is available here: 
+            - English Version --> ${previewUrl}en/
+            - Italian Version --> ${previewUrl}it/`;
             
             github.rest.issues.createComment({
               owner: context.repo.owner,
