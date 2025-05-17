@@ -6,12 +6,11 @@ This script:
 2. Builds a structure of available documentation versions
 3. Generates an HTML index with links to all available documentation
 """
-import os
 import shutil
 from datetime import datetime
 import logging
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from jinja2 import Environment, FileSystemLoader
 from common_utils import get_github_repo, get_pr_info
 
@@ -23,11 +22,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Get GitHub directory path
-GITHUB_DIR = Path(__file__).resolve().parent.parent
+GITHUB_DIR = Path(__file__).resolve().parent #.parent
 
 
 def scan_directory(base_path: str = '.') -> Dict[str, Any]:
-    """Scan the current directory structure and return a dictionary with the structure.
+    """Scan the directory structure and return a dictionary with the structure.
     
     Args:
         base_path: Base path to scan
@@ -45,6 +44,7 @@ def scan_directory(base_path: str = '.') -> Dict[str, Any]:
     }
     
     base_path = Path(base_path)
+    logger.info(f"Scanning directory structure at: {base_path}")
     
     # Check versione-corrente
     versione_corrente_path = base_path / "versione-corrente"
@@ -130,7 +130,7 @@ def generate_html(structure: Dict[str, Any]) -> str:
     # Set up Jinja2 environment with templates directory
     template_dir = GITHUB_DIR / "templates"
     env = Environment(loader=FileSystemLoader(template_dir))
-    template = env.get_template("index.html")
+    template = env.get_template("index-template.html")
     
     # Prepare template data
     current_date = datetime.now().strftime("%Y-%m-%d")
@@ -140,34 +140,13 @@ def generate_html(structure: Dict[str, Any]) -> str:
     return template.render(structure=structure, current_date=current_date, repo=repo)
 
 
-def copy_static_files(output_dir: str = '.') -> None:
-    """Copy static files to the output directory.
-    
-    Args:
-        output_dir: Directory where index.html will be generated
-    """
-    output_path = Path(output_dir)
-    static_dir = GITHUB_DIR / "static"
-    
-    # Create static directory in output if doesn't exist
-    output_static_dir = output_path / "static"
-    output_static_dir.mkdir(exist_ok=True)
-    
-    # Copy CSS file
-    css_source = static_dir / "styles.css"
-    css_dest = output_static_dir / "styles.css"
-    
-    try:
-        shutil.copy2(css_source, css_dest)
-        logger.info(f"Copied CSS to {css_dest}")
-    except Exception as e:
-        logger.error(f"Error copying static files: {e}")
-
-
 def main() -> None:
-    """Main function to scan directories and generate index.html."""
+    """Main function to scan directories and generate index.html in the GitHub directory level."""
+    # Get output directory (GITHUB_DIR)
+    output_dir = GITHUB_DIR
+    
     # Scan the current directory (we're in the root of gh-pages)
-    structure = scan_directory()
+    structure = scan_directory(output_dir)
     logger.info("Directory structure found:")
     logger.info(f"versione-corrente: {structure['versione-corrente']}")
     logger.info(f"PRs: {len(structure['prs'])} found")
@@ -176,14 +155,12 @@ def main() -> None:
     # Generate HTML content
     html_content = generate_html(structure)
     
-    # Copy static files
-    copy_static_files()
-    
-    # Write the HTML to index.html
+    # Write the HTML to index.html in the output directory
+    index_path = output_dir / "index.html"
     try:
-        with open("index.html", "w", encoding="utf-8") as f:
+        with open(index_path, "w", encoding="utf-8") as f:
             f.write(html_content)
-        logger.info("Generated index.html successfully!")
+        logger.info(f"Generated index.html successfully at {index_path}")
     except Exception as e:
         logger.error(f"Error writing index.html: {e}")
 
