@@ -118,8 +118,9 @@ jobs:
             GH_TOKEN: ${{ github.token }}
           run: |
             # Run the Python scripts 
-            python cleanup_old_prs.py
-            python generate_index.py
+            python ./scripts/cleanup_old_prs.py
+            python ./scripts/generate_index.py
+            
             
         # Commit and push back to gh-pages
         - name: Commit and push 
