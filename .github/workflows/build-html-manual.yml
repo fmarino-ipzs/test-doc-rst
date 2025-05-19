@@ -68,30 +68,28 @@ jobs:
           mkdir -p html/templates/ && cp -r .github/templates/* html/templates/
           mkdir -p html/static/ && cp -r .github/static/* html/static/
 
-      # Prima eseguiamo il checkout del branch gh-pages per aggiungervi le nuove build
       - name: Checkout gh-pages branch
         uses: actions/checkout@v3
         with:
           ref: gh-pages
-          path: gh-pages-branch  # Checkout in una sottodirectory
+          path: gh-pages-temp
 
-      # Copiamo i contenuti costruiti nella sottodirectory gh-pages
-      - name: Copy new content to gh-pages
+      - name: Integrate and update gh-pages content
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          rsync -av html/ gh-pages-branch/
-          cd gh-pages-branch
+          rsync -av html/ gh-pages-temp/
           
-          # Esegui i script Python per aggiornare index e pulire PR vecchie
+          cd gh-pages-temp
+
           python ./scripts/cleanup_old_prs.py
           python ./scripts/generate_index.py
           
-          # Configuriamo git
           git config --local user.name 'GitHub Actions'
           git config --local user.email 'actions@github.com'
           
-          # Aggiungiamo i file modificati e facciamo commit
           git add .
-          git commit -m "Update documentation and regenerate index"
+          git commit -m "Update documentation and index for PR #${{ github.event.inputs.pr_number }}"
           git push
 
       - name: Comment on PR
