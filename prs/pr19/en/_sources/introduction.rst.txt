@@ -6,6 +6,7 @@ Furthermore, it aims to serve as a reference point for the testing team, outlini
 This introductory section sets the stage for a more detailed exploration of the test environment, test cases, execution procedures, and reporting mechanisms that constitute the core of this document.
 
 Marcus say hi!
+Marcus say hi again!
 
 The following diagram depicts the High-Level Architecture.
 
