@@ -42,7 +42,7 @@ jobs:
       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
 
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      # Checks-out your repository under $GITHUB_WORKSPACE
       - uses: actions/checkout@v3
 
       # Install Python
@@ -70,6 +70,7 @@ jobs:
           python -m pip install -r requirements-dev.txt
           python -m pip install Jinja2==3.1.6
 
+      # Determine deployment path based on event type
       - name: Generate deployment paths
         id: deployment
         run: |
@@ -86,7 +87,7 @@ jobs:
             TAG="${{ github.event.release.tag_name }}"
             echo "path=releases/${TAG}" >> $GITHUB_OUTPUT
           else 
-            # this is the case where we have a push on vdefault branch
+            # Default case - push to default branch
             echo "path=$DEFAULT_BRANCH" >> $GITHUB_OUTPUT
           fi
 
@@ -103,34 +104,39 @@ jobs:
           sphinx-build -b html docs/it/ html/${{ steps.deployment.outputs.path }}/it
           sphinx-build -b html docs/en/ html/${{ steps.deployment.outputs.path }}/en
 
+      # Copy scripts and templates for deployment
       - name: Copy python scripts for deploy
         run: |
           mkdir -p html/scripts/ && cp -r .github/scripts/* html/scripts/
           mkdir -p html/templates/ && cp -r .github/templates/* html/templates/
           mkdir -p html/static/ && cp -r .github/static/* html/static/
 
+      # Check out the gh-pages branch in a temporary directory
       - name: Checkout gh-pages branch
         uses: actions/checkout@v3
         with:
           ref: gh-pages
           path: gh-pages-temp
 
+      # Integrate new content and update gh-pages
       - name: Integrate and update gh-pages content
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Copy all generated files to the temporary directory
           rsync -av html/ gh-pages-temp/
           
           cd gh-pages-temp
           
+          # Clean up old PR directories and generate index
           python ./scripts/cleanup_old_prs.py
           python ./scripts/generate_index.py
           
-          # Configuriamo git per il commit
+          # Configure git for commit
           git config --local user.name 'GitHub Actions'
           git config --local user.email 'actions@github.com'
           
+          # Add modified files and commit
           git add .
           git commit -m "Update documentation and regenerate index"
           git push
-

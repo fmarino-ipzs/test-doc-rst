@@ -14,6 +14,7 @@ jobs:
   build-and-index:
     runs-on: ubuntu-latest
     steps:
+      # Checkout the PR code
       - name: Checkout PR
         uses: actions/checkout@v3
         with:
@@ -44,6 +45,7 @@ jobs:
           python -m pip install -r requirements-dev.txt
           python -m pip install Jinja2==3.1.6
 
+      # Set the deployment path for this PR
       - name: Set deployment path
         id: deployment
         run: |
@@ -62,36 +64,44 @@ jobs:
           sphinx-build -b html docs/it/ html/${{ steps.deployment.outputs.path }}/it
           sphinx-build -b html docs/en/ html/${{ steps.deployment.outputs.path }}/en
 
+      # Copy scripts and templates for deployment
       - name: Copy python scripts for deploy
         run: |
           mkdir -p html/scripts/ && cp -r .github/scripts/* html/scripts/
           mkdir -p html/templates/ && cp -r .github/templates/* html/templates/
           mkdir -p html/static/ && cp -r .github/static/* html/static/
 
+      # Check out the gh-pages branch in a temporary directory
       - name: Checkout gh-pages branch
         uses: actions/checkout@v3
         with:
           ref: gh-pages
           path: gh-pages-temp
 
+      # Integrate new content and update gh-pages
       - name: Integrate and update gh-pages content
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Copy all generated files to the temporary directory
           rsync -av html/ gh-pages-temp/
           
           cd gh-pages-temp
-
+          
+          # Clean up old PR directories and generate index
           python ./scripts/cleanup_old_prs.py
           python ./scripts/generate_index.py
           
+          # Configure git for commit
           git config --local user.name 'GitHub Actions'
           git config --local user.email 'actions@github.com'
           
+          # Add modified files and commit
           git add .
           git commit -m "Update documentation and index for PR #${{ github.event.inputs.pr_number }}"
           git push
 
+      # Add a comment to the PR with preview links
       - name: Comment on PR
         uses: actions/github-script@v6
         with:
