@@ -26,86 +26,47 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install LaTeX
+      - name: Install LaTeX and deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-lang-italian texlive-lang-english latexmk texlive-pictures texlive-font-utils ghostscript poppler-utils imagemagick netpbm texlive-base texlive-binaries
-
-      - name: Install Graphviz
-        run: |
-          sudo apt-get install -y graphviz
+          sudo apt-get install -y texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-lang-italian texlive-lang-english latexmk texlive-pictures texlive-font-utils ghostscript poppler-utils imagemagick netpbm texlive-base texlive-binaries graphviz
 
       - name: Install Python dependencies
         run: |
           python -m pip install -r requirements-dev.txt
-          # Install svglib for svg to pdf conversion
-          python -m pip install svglib
 
-      # - name: Generate LaTeX files for Italian docs
-      #   run: |
-      #     sphinx-build -b latex docs/it/ build/latex/it
-
-      - name: Generate LaTeX files and build
+      - name: Generate LaTeX files and build en version
         run: |
           sphinx-build -b latex docs/en/ build/latex/en
           cd build/latex/en
           latexmk -pdf technical-docs.tex
 
-      # - name: Build LaTeX and PDF for Italian docs
-      #   uses: xu-cheng/latex-action@v3
-      #   with:
-      #     root_file: technical-docs.tex
-      #     working_directory: build/latex/it
-      #     extra_system_packages: "ghostscript poppler-utils imagemagick netpbm inkscape"
-
-      # - name: Build LaTeX and PDF for English docs
-      #   uses: xu-cheng/latex-action@v3
-      #   with:
-      #     root_file: technical-docs.tex
-      #     pre_compile: "sphinx-build -b latex docs/en/ build/latex/en"
-      #     working_directory: build/latex/en
-      #     extra_system_packages: "ghostscript poppler-utils imagemagick netpbm inkscape"
+      # - name: Generate LaTeX files and build it version
+      #   run: |
+      #     sphinx-build -b latex docs/it/ build/latex/it
+      #     cd build/latex/it
+      #     latexmk -pdf technical-docs.tex
 
       - name: Create PDF directory
         run: |
           mkdir -p pdf_output
-          # cp build/latex/it/technical-docs.pdf pdf_output/technical-docs-it.pdf
-          cp build/latex/en/technical-docs.pdf pdf_output/technical-docs-en.pdf
-      
-      # - name: Deploy PDFs to PDF branch
-      #   if: success()
-      #   run: |
-      #     git config --global user.name "GitHub Actions"
-      #     git config --global user.email "actions@github.com"
           
-      #     # Create a new branch or use existing one
-      #     git checkout -b pdf-output || git checkout pdf-output
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
           
-      #     # Copy the PDFs to a folder in this branch
-      #     mkdir -p pdf-artifacts
-      #     cp pdf_output/*.pdf pdf-artifacts/
-          
-      #     # Add timestamp to filenames
-      #     TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-      #     for file in pdf-artifacts/*.pdf; do
-      #       base=$(basename "$file" .pdf)
-      #       mv "$file" "pdf-artifacts/${base}-${TIMESTAMP}.pdf"
-      #     done
-          
-      #     # Add, commit and push
-      #     git add pdf-artifacts/
-      #     git commit -m "Update PDF documentation - ${TIMESTAMP}"
-      #     git push -f origin pdf-output
+          # cp build/latex/it/technical-docs.pdf pdf_output/technical-docs-it-${TIMESTAMP}.pdf
+          cp build/latex/en/technical-docs.pdf pdf_output/technical-docs-en-${TIMESTAMP}.pdf
 
       - name: Upload PDFs as artifact
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: documentation-pdf
           path: pdf_output/*.pdf
 
-      # - name: Upload Release Asset
-      #   uses: softprops/action-gh-release@v1
-      #   with:
-      #     files: pdf_output/*.pdf
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload Release Asset
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: pdf_output/*.pdf
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

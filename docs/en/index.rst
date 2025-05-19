@@ -12,4 +12,5 @@ This document provides the technical architecture, implementation framework, and
   :numbered:
 
   introduction.rst
+  appendix.rst
 
