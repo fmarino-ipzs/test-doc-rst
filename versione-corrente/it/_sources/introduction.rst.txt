@@ -13,3 +13,12 @@ Il seguente diagramma illustra l'Architettura di Alto Livello.
 
 Requisiti
 ------------
+
+Requisiti principali.
+
+API
+---
+.. role:: raw-html(raw)
+  :format: html
+  
+La Specifica OpenAPI è disponibile :raw-html:`<a href="API-test.html" target="_blank">qui</a>`.

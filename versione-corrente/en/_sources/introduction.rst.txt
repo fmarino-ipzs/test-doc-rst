@@ -18,3 +18,10 @@ Requirements
 
 This section defines the main requirements ...
 
+API
+---
+.. role:: raw-html(raw)
+  :format: html
+  
+A complete OpenAPI Specification is available :raw-html:`<a href="API-test.html" target="_blank">here</a>`.
+
