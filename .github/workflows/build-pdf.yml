@@ -103,9 +103,9 @@ jobs:
           name: documentation-pdf
           path: pdf_output/*.pdf
 
-      - name: Upload Release Asset
-        uses: softprops/action-gh-release@v1
-        with:
-          files: pdf_output/*.pdf
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # - name: Upload Release Asset
+      #   uses: softprops/action-gh-release@v1
+      #   with:
+      #     files: pdf_output/*.pdf
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

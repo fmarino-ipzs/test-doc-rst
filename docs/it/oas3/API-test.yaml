@@ -1,0 +1,390 @@
+openapi: 3.0.0
+info:
+  title: API Biblioteca
+  description: API per la gestione di una biblioteca
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@biblioteca.it
+    url: https://biblioteca.it/support
+servers:
+  - url: https://api.biblioteca.it/v1
+    description: Server di produzione
+  - url: https://dev-api.biblioteca.it/v1
+    description: Server di sviluppo
+tags:
+  - name: libri
+    description: Operazioni sui libri
+  - name: autori
+    description: Operazioni sugli autori
+
+paths:
+  /libri:
+    get:
+      summary: Ottiene la lista di tutti i libri
+      description: Restituisce un array di oggetti libro
+      operationId: getLibri
+      tags:
+        - libri
+      parameters:
+        - name: limit
+          in: query
+          description: Numero massimo di libri da restituire
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          description: Numero di libri da saltare
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+        - name: genere
+          in: query
+          description: Filtra libri per genere
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Operazione riuscita
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Libro'
+        '400':
+          description: Parametri di richiesta non validi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      summary: Aggiunge un nuovo libro
+      description: Crea un nuovo libro nel sistema
+      operationId: createLibro
+      tags:
+        - libri
+      requestBody:
+        description: Oggetto libro da aggiungere
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LibroInput'
+      responses:
+        '201':
+          description: Libro creato con successo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Libro'
+        '400':
+          description: Dati libro non validi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /libri/{id}:
+    get:
+      summary: Ottiene un libro specifico
+      description: Restituisce i dettagli di un libro specifico
+      operationId: getLibroById
+      tags:
+        - libri
+      parameters:
+        - name: id
+          in: path
+          description: ID del libro da ottenere
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Operazione riuscita
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Libro'
+        '404':
+          description: Libro non trovato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      summary: Aggiorna un libro esistente
+      description: Aggiorna i dettagli di un libro specifico
+      operationId: updateLibro
+      tags:
+        - libri
+      parameters:
+        - name: id
+          in: path
+          description: ID del libro da aggiornare
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        description: Oggetto libro aggiornato
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LibroInput'
+      responses:
+        '200':
+          description: Libro aggiornato con successo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Libro'
+        '400':
+          description: Dati libro non validi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Libro non trovato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Elimina un libro
+      description: Elimina un libro dal sistema
+      operationId: deleteLibro
+      tags:
+        - libri
+      parameters:
+        - name: id
+          in: path
+          description: ID del libro da eliminare
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Libro eliminato con successo
+        '404':
+          description: Libro non trovato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /autori:
+    get:
+      summary: Ottiene la lista di tutti gli autori
+      description: Restituisce un array di oggetti autore
+      operationId: getAutori
+      tags:
+        - autori
+      responses:
+        '200':
+          description: Operazione riuscita
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Autore'
+        '500':
+          description: Errore interno del server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Libro:
+      type: object
+      required:
+        - id
+        - titolo
+        - anno_pubblicazione
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+        titolo:
+          type: string
+          example: "Il nome della rosa"
+        autore_id:
+          type: integer
+          format: int64
+        anno_pubblicazione:
+          type: integer
+          format: int32
+          minimum: 1000
+          maximum: 9999
+          example: 1980
+        isbn:
+          type: string
+          pattern: '^[0-9]{13}$'
+          example: "9788804668237"
+        genere:
+          type: string
+          enum: [romanzo, saggio, biografia, fantascienza, poesia]
+          example: "romanzo"
+        disponibile:
+          type: boolean
+          default: true
+        data_creazione:
+          type: string
+          format: date-time
+          readOnly: true
+      example:
+        id: 1
+        titolo: "Il nome della rosa"
+        autore_id: 42
+        anno_pubblicazione: 1980
+        isbn: "9788804668237"
+        genere: "romanzo"
+        disponibile: true
+        data_creazione: "2023-01-10T12:00:00Z"
+
+    LibroInput:
+      type: object
+      required:
+        - titolo
+        - anno_pubblicazione
+      properties:
+        titolo:
+          type: string
+          example: "Il nome della rosa"
+        autore_id:
+          type: integer
+          format: int64
+        anno_pubblicazione:
+          type: integer
+          format: int32
+          minimum: 1000
+          maximum: 9999
+          example: 1980
+        isbn:
+          type: string
+          pattern: '^[0-9]{13}$'
+          example: "9788804668237"
+        genere:
+          type: string
+          enum: [romanzo, saggio, biografia, fantascienza, poesia]
+          example: "romanzo"
+        disponibile:
+          type: boolean
+          default: true
+
+    Autore:
+      type: object
+      required:
+        - id
+        - nome
+        - cognome
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+        nome:
+          type: string
+          example: "Umberto"
+        cognome:
+          type: string
+          example: "Eco"
+        data_nascita:
+          type: string
+          format: date
+          example: "1932-01-05"
+        data_morte:
+          type: string
+          format: date
+          nullable: true
+        nazionalita:
+          type: string
+          example: "Italiana"
+      example:
+        id: 42
+        nome: "Umberto"
+        cognome: "Eco"
+        data_nascita: "1932-01-05"
+        data_morte: "2016-02-19"
+        nazionalita: "Italiana"
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+      example:
+        code: 400
+        message: "Parametri di richiesta non validi"
+
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    OAuth2:
+      type: oauth2
+      flows:
+        implicit:
+          authorizationUrl: https://auth.biblioteca.it/oauth/authorize
+          scopes:
+            read:libri: Accesso in lettura ai libri
+            write:libri: Accesso in scrittura ai libri
+            read:autori: Accesso in lettura agli autori
+
+security:
+  - apiKey: []
+  - OAuth2: [read:libri, write:libri, read:autori]

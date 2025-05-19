@@ -53,14 +53,26 @@ extensions = [
 ]
 
 plantuml_jar = confdir.parent.parent / "utils/plantuml/plantuml-1.2025.2.jar"
+print("plantuml_jar path = ", str(plantuml_jar))
 plantuml = f'java -jar {str(plantuml_jar)}'
 plantuml_output_format = 'svg'
 plantuml_latex_output_format = 'pdf'
+plantuml_server = ''
 
 images_config = {
     "default_image_width": "99%",
     "align": "center"
 }
+
+redoc = [
+    {
+        'name': 'Library API',
+        'page': 'API-test',
+        'spec': './oas3/API-test.yaml',
+        'embed': True,
+    }
+]
+redoc_uri = 'https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js'
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
