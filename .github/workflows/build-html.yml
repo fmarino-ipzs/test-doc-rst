@@ -45,7 +45,7 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
 
-      # Install Python 
+      # Install Python
       - uses: actions/setup-python@v4
         with:
           python-version: "3.10"
@@ -64,7 +64,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y graphviz
 
-      # Install python dependancies 
+      # Install python dependancies
       - name: Install deps
         run: |-
           python -m pip install -r requirements-dev.txt
@@ -109,6 +109,7 @@ jobs:
           mkdir -p html/static/ && cp -r .github/static/* html/static/
 
       - name: Deploy to GitHub Pages
+        id: deploy
         if: success()
         uses: crazy-max/ghaction-github-pages@v2
         with:
@@ -118,22 +119,35 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set deployment status
+        if: success()
+        id: deployment_status
+        run: echo "deployed=true" >> $GITHUB_OUTPUT
+
+    outputs:
+      deployed: ${{ steps.deployment_status.outputs.deployed }}
+
   generate-index:
-      needs: build  # This ensures this job runs only after build and deploy jobs are succesfully completed
+      needs: build  # This ensures this job runs only after build job is succesfully completed
+      if: needs.build.outputs.deployed == 'true'
       runs-on: ubuntu-latest
       steps:
+        - name: Wait for deployment to complete
+          run: sleep 15s
+
         # Check out the gh-pages branch
         - name: Checkout gh-pages branch
           uses: actions/checkout@v3
           with:
             ref: gh-pages  # Checkout the gh-pages branch
-                
+            clean: true
+
         # Install Python
         - uses: actions/setup-python@v4
           with:
             python-version: "3.10"
-            
-        # Install python dependancies 
+
+        # Install python dependancies
         - name: Install deps
           run: |-
             python -m pip install Jinja2==3.1.6
@@ -146,9 +160,9 @@ jobs:
             # Run the Python scripts 
             python ./scripts/cleanup_old_prs.py
             python ./scripts/generate_index.py
-            
+
         # Commit and push back to gh-pages
-        - name: Commit and push 
+        - name: Commit and push
           run: |
             git config --global user.name 'GitHub Actions'
             git config --global user.email 'actions@github.com'
