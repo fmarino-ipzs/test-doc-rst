@@ -35,6 +35,17 @@ jobs:
         run: |
           python -m pip install -r requirements-dev.txt
 
+      - name: Append tags to document title
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            TAG="${{ github.event.release.tag_name }}"
+            sed -i 's/\(settings_project_name = ".*\)"/\1 - Release '"${TAG}"'"/' docs/it/conf.py
+            sed -i 's/\(settings_project_name = ".*\)"/\1 - Release '"${TAG}"'"/' docs/en/conf.py
+          else
+            # this is fo workflow_dispatch, we don't change the title
+            echo "Using default title for main branch"
+          fi
+
       - name: Generate LaTeX files and build en version
         run: |
           sphinx-build -b latex docs/en/ build/latex/en
