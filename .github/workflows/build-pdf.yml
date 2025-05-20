@@ -11,6 +11,8 @@ on:
 jobs:
   build-pdf:
     runs-on: ubuntu-latest
+    env:
+      SETTINGS_FILE_NAME: "technical-docs"
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
@@ -48,17 +50,19 @@ jobs:
             sed -i 's/\(settings_project_name = ".*\)"/\1 - Editor'"'"'s Copy"/' docs/en/conf.py
           fi
 
+          sed -i 's/settings_file_name = ".*"/settings_file_name = "'"$SETTINGS_FILE_NAME"'"/' docs/en/conf.py
+
       - name: Generate LaTeX files and build en version
         run: |
           sphinx-build -b latex docs/en/ build/latex/en
           cd build/latex/en
-          latexmk -pdf technical-docs.tex
+          latexmk -pdf $SETTINGS_FILE_NAME.tex
 
-      # - name: Generate LaTeX files and build it version
-      #   run: |
-      #     sphinx-build -b latex docs/it/ build/latex/it
-      #     cd build/latex/it
-      #     latexmk -pdf technical-docs.tex
+      - name: Generate LaTeX files and build it version
+        run: |
+          sphinx-build -b latex docs/it/ build/latex/it
+          cd build/latex/it
+          latexmk -pdf $SETTINGS_FILE_NAME.tex
 
       - name: Create PDF directory
         run: |
@@ -66,8 +70,8 @@ jobs:
           
           TIMESTAMP=$(date +%Y%m%d-%H%M%S)
           
-          # cp build/latex/it/technical-docs.pdf pdf_output/technical-docs-it-${TIMESTAMP}.pdf
-          cp build/latex/en/technical-docs.pdf pdf_output/technical-docs-en-${TIMESTAMP}.pdf
+          cp build/latex/it/$SETTINGS_FILE_NAME.pdf pdf_output/$SETTINGS_FILE_NAME-it-${TIMESTAMP}.pdf
+          cp build/latex/en/$SETTINGS_FILE_NAME.pdf pdf_output/$SETTINGS_FILE_NAME-en-${TIMESTAMP}.pdf
 
       - name: Upload PDFs as artifact
         if: github.event_name == 'workflow_dispatch'
