@@ -2,7 +2,7 @@ name: pdf-build
 
 on:
   release:
-    type:
+    types:
       - published 
   
   # Allows you to run this workflow manually from the Actions tab
