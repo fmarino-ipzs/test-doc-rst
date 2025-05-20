@@ -5,14 +5,14 @@ on:
     branches:
       - 'versione-corrente'
     paths:
-      - 'docs/**' # trigger only if there are changes in docs path
+      - 'docs/**' # Trigger only if there are changes in docs path
   pull_request:
     types:
       - opened
       - synchronize
       - reopened
     paths:
-      - 'docs/**' # trigger only if there are changes in docs path
+      - 'docs/**' # Trigger only if there are changes in docs path
   release:
     types:
       - published
@@ -42,7 +42,7 @@ jobs:
       (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
 
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE
+      # Check out your repository under $GITHUB_WORKSPACE
       - uses: actions/checkout@v3
 
       # Install Python
@@ -82,13 +82,32 @@ jobs:
 
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             echo "path=prs/pr${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
-            echo "prinfo="
           elif [[ "${{ github.event_name }}" == "release" ]]; then
             TAG="${{ github.event.release.tag_name }}"
             echo "path=releases/${TAG}" >> $GITHUB_OUTPUT
           else 
             # Default case - push to default branch
             echo "path=$DEFAULT_BRANCH" >> $GITHUB_OUTPUT
+          fi
+
+      # Append appropriate tags to document title based on build context
+      - name: Append tags to document title
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            TAG="${{ github.event.release.tag_name }}"
+            sed -i 's/\(settings_project_name = ".*\)"/\1 - Release '"${TAG}"'"/' docs/it/conf.py
+            sed -i 's/\(settings_project_name = ".*\)"/\1 - Release '"${TAG}"'"/' docs/en/conf.py
+            echo "Applied release tag '${TAG}' to document titles"
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            PR_NUM="${{ github.event.pull_request.number }}"
+            sed -i 's/\(settings_project_name = ".*\)"/\1 - PR #'"${PR_NUM}"'"/' docs/it/conf.py
+            sed -i 's/\(settings_project_name = ".*\)"/\1 - PR #'"${PR_NUM}"'"/' docs/en/conf.py
+            echo "Applied PR tag '#${PR_NUM}' to document titles"
+          else
+            # This is for push to main branch or workflow_dispatch
+            echo "Using default title for main branch"
+            sed -i 's/\(settings_project_name = ".*\)"/\1 - Versione Corrente"/' docs/it/conf.py
+            sed -i 's/\(settings_project_name = ".*\)"/\1 - Editor'"'"'s Copy"/' docs/en/conf.py
           fi
 
       # Run Sphinx build for HTML output
